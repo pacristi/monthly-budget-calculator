@@ -1,0 +1,4 @@
+data/*.json
+data/archive/
+ingest/node_modules/
+.env
