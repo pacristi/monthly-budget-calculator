@@ -28,7 +28,7 @@ ingest: ## Ejecuta el scraper de Node para actualizar current.json
 
 run: ## Ejecuta la calculadora en Go sin compilar el binario
 	@echo "🧮 Calculando presupuesto..."
-	@go run $(MAIN_PATH)
+	@go run $(MAIN_PATH) data/current.json data/divisiones.json
 
 build: ## Compila el binario de Go para producción
 	@echo "🔨 Compilando binario..."
