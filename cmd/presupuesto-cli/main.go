@@ -18,6 +18,7 @@ func main() {
 	_ = godotenv.Load()
 
 	detalleFlag := flag.Bool("detalle", false, "Mostrar la lista de gastos que impactan este mes")
+	proyectarFlag := flag.Int("proyectar", 0, "Proyectar la carga de gastos para los próximos N meses")
 	flag.Parse()
 
 	args := flag.Args()
@@ -92,4 +93,19 @@ func main() {
 	fmt.Printf("Carga de gastos actual en el mes: $%.0f\n", (sueldo*porcentajeParaGastos)-disponible)
 	fmt.Println("--------------------------------------------------")
 	fmt.Printf("DISPONIBLE RESTANTE PARA EL MES: $%.0f\n", disponible)
+
+	if *proyectarFlag > 0 {
+		fmt.Println("\n=== Proyección de Pasivos ===")
+		gastos, err := adaptador.ObtenerGastosValidos(periodo) // El adaptador ignora el periodo para devolver todos
+		if err != nil {
+			fmt.Printf("Error obteniendo gastos para proyectar: %v\n", err)
+		} else {
+			proyector := presupuesto.NewProyectorPresupuesto()
+			proyecciones := proyector.Proyectar(gastos, ahora, *proyectarFlag)
+			for _, p := range proyecciones {
+				fmt.Printf("[%02d/%d] Total Comprometido: $%.0f\n", p.Mes, p.Anio, p.TotalComprometido)
+			}
+		}
+		fmt.Println("=============================")
+	}
 }

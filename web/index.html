@@ -8,8 +8,11 @@
 </head>
 <body>
     <header class="header">
-        <div class="container">
+        <div class="container" style="display: flex; justify-content: space-between; align-items: center;">
             <h1>Budget Dashboard</h1>
+            <div>
+                <input type="month" id="period-selector" class="form-control" style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ccc;">
+            </div>
         </div>
     </header>
 
@@ -31,6 +34,27 @@
             <div class="card highlight">
                 <h3>Disponible Restante</h3>
                 <p class="value" id="val-disponible">--</p>
+            </div>
+        </section>
+
+        <!-- Proyecciones -->
+        <section class="panel" style="margin-bottom: 2rem;">
+            <div class="panel-header">
+                <h2>Proyección de Pasivos (Próximos 6 Meses)</h2>
+            </div>
+            <div class="panel-body">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Año</th>
+                            <th>Mes</th>
+                            <th>Total Comprometido</th>
+                        </tr>
+                    </thead>
+                    <tbody id="proyecciones-tbody">
+                        <tr><td colspan="3" class="text-center">Cargando proyecciones...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </section>
 

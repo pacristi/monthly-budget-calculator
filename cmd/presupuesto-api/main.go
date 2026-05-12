@@ -44,6 +44,7 @@ func main() {
 
 	// API endpoints
 	http.HandleFunc("/api/budget", handleBudget)
+	http.HandleFunc("/api/projections", handleProjections)
 	http.HandleFunc("/api/movements", handleMovements)
 	http.HandleFunc("/api/divisions", handleDivisions)
 
@@ -81,6 +82,19 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 	calc := presupuesto.NewCalculadora(adaptador, porcentajeParaGastos)
 
 	ahora := time.Now()
+	
+	// Permitir sobreescribir mes y año mediante query params
+	if mStr := r.URL.Query().Get("month"); mStr != "" {
+		if m, err := strconv.Atoi(mStr); err == nil && m >= 1 && m <= 12 {
+			ahora = time.Date(ahora.Year(), time.Month(m), 1, 0, 0, 0, 0, ahora.Location())
+		}
+	}
+	if yStr := r.URL.Query().Get("year"); yStr != "" {
+		if y, err := strconv.Atoi(yStr); err == nil {
+			ahora = time.Date(y, ahora.Month(), 1, 0, 0, 0, 0, ahora.Location())
+		}
+	}
+
 	periodo := presupuesto.PeriodoPresupuestario{
 		Inicio: time.Date(ahora.Year(), ahora.Month(), 1, 0, 0, 0, 0, ahora.Location()),
 		Fin:    time.Date(ahora.Year(), ahora.Month()+1, 1, 0, 0, 0, 0, ahora.Location()).Add(-time.Nanosecond),
@@ -131,6 +145,56 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
+
+func handleProjections(w http.ResponseWriter, r *http.Request) {
+	tasaCambioUSD, diaCorteCredito, _ := getConfig()
+
+	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", tasaCambioUSD, diaCorteCredito)
+	
+	mesesHaciaAdelante := 6 // default
+	if mStr := r.URL.Query().Get("months"); mStr != "" {
+		if m, err := strconv.Atoi(mStr); err == nil && m > 0 {
+			mesesHaciaAdelante = m
+		}
+	}
+
+	ahora := time.Now()
+	periodoActual := presupuesto.PeriodoPresupuestario{
+		Inicio: time.Date(ahora.Year(), ahora.Month(), 1, 0, 0, 0, 0, ahora.Location()),
+		Fin:    time.Date(ahora.Year(), ahora.Month()+1, 1, 0, 0, 0, 0, ahora.Location()).Add(-time.Nanosecond),
+	}
+
+	gastos, err := adaptador.ObtenerGastosValidos(periodoActual)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	proyector := presupuesto.NewProyectorPresupuesto()
+	proyecciones := proyector.Proyectar(gastos, ahora, mesesHaciaAdelante)
+
+	type ProyeccionRes struct {
+		Anio              int     `json:"anio"`
+		Mes               string  `json:"mes"`
+		MesNum            int     `json:"mesNum"`
+		TotalComprometido float64 `json:"totalComprometido"`
+	}
+
+	var res []ProyeccionRes
+	mesesNombres := []string{"Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"}
+	for _, p := range proyecciones {
+		res = append(res, ProyeccionRes{
+			Anio:              p.Anio,
+			Mes:               mesesNombres[p.Mes-1],
+			MesNum:            int(p.Mes),
+			TotalComprometido: p.TotalComprometido,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}
+
 
 func handleMovements(w http.ResponseWriter, r *http.Request) {
 	client := obchile.NewClient(rutaJson)

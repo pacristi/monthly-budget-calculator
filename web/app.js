@@ -8,7 +8,14 @@ const formatCurrency = (value, isUSD = false) => {
 // Fetch budget data and render summary/gastos
 const loadBudget = async () => {
     try {
-        const response = await fetch('/api/budget');
+        let url = '/api/budget';
+        const selector = document.getElementById('period-selector');
+        if (selector && selector.value) {
+            const [year, month] = selector.value.split('-');
+            url += `?year=${year}&month=${month}`;
+        }
+        
+        const response = await fetch(url);
         const data = await response.json();
 
         document.getElementById('val-sueldo').textContent = formatCurrency(data.sueldo);
@@ -121,8 +128,49 @@ form.onsubmit = async (e) => {
     }
 };
 
+// Fetch projections
+const loadProjections = async () => {
+    try {
+        const response = await fetch('/api/projections');
+        const data = await response.json();
+        
+        const tbody = document.getElementById('proyecciones-tbody');
+        tbody.innerHTML = '';
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center">No hay proyecciones disponibles.</td></tr>';
+        } else {
+            data.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${p.anio}</td>
+                    <td>${p.mes}</td>
+                    <td>${formatCurrency(p.totalComprometido)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    } catch (e) {
+        console.error('Error loading projections:', e);
+        document.getElementById('proyecciones-tbody').innerHTML = '<tr><td colspan="3" class="text-center" style="color:red">Error cargando proyecciones.</td></tr>';
+    }
+};
+
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
+    const selector = document.getElementById('period-selector');
+    if (selector) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        selector.value = `${year}-${month}`;
+        
+        selector.addEventListener('change', () => {
+            loadBudget();
+        });
+    }
+
     loadBudget();
+    loadProjections();
     loadMovements();
 });
+
