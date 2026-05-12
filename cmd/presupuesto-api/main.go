@@ -208,11 +208,11 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 	overrides, _ := shared.LeerOverrides(rutaDivisiones)
 
 	type MovimientoRes struct {
-		Fecha       string  `json:"fecha"`
-		Descripcion string  `json:"descripcion"`
-		Monto       float64 `json:"monto"`
-		IsUSD       bool    `json:"isUsd"`
-		DivididoEn  int     `json:"divididoEn,omitempty"`
+		Fecha       string   `json:"fecha"`
+		Descripcion string   `json:"descripcion"`
+		Monto       float64  `json:"monto"`
+		IsUSD       bool     `json:"isUsd"`
+		MiParte     *float64 `json:"miParte,omitempty"`
 	}
 
 	var result []MovimientoRes
@@ -220,11 +220,12 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 		if m.Monto >= 0 {
 			continue // Solo mostramos gastos (negativos)
 		}
-		
-		divEn := 0
+
+		var miParte *float64
 		for _, o := range overrides {
 			if o.Fecha == m.Fecha && o.MontoOriginal == m.Monto {
-				divEn = o.DivididoEn
+				v := o.MiParte
+				miParte = &v
 				break
 			}
 		}
@@ -240,7 +241,7 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 			Descripcion: m.Descripcion,
 			Monto:       m.Monto,
 			IsUSD:       isUsd,
-			DivididoEn:  divEn,
+			MiParte:     miParte,
 		})
 	}
 
@@ -272,7 +273,7 @@ func handleDivisions(w http.ResponseWriter, r *http.Request) {
 	found := false
 	for i, o := range overrides {
 		if o.Fecha == req.Fecha && o.MontoOriginal == req.MontoOriginal {
-			overrides[i].DivididoEn = req.DivididoEn
+			overrides[i].MiParte = req.MiParte
 			found = true
 			break
 		}

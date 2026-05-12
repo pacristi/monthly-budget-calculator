@@ -58,14 +58,17 @@ const loadMovements = async () => {
         } else {
             data.forEach(m => {
                 const tr = document.createElement('tr');
-                let badge = m.divididoEn && m.divididoEn > 1 ? `<span class="badge">1/${m.divididoEn}</span>` : '';
+                let badge = '';
+                if (m.miParte !== undefined && m.miParte !== null && m.miParte !== m.monto) {
+                    badge = `<span class="badge">mi parte: ${formatCurrency(Math.abs(m.miParte), m.isUsd)}</span>`;
+                }
                 tr.innerHTML = `
                     <td>${m.fecha}</td>
                     <td>${m.descripcion} ${badge}</td>
                     <td>${formatCurrency(m.monto, m.isUsd)}</td>
                     <td>
-                        <button class="btn btn-primary btn-sm" onclick="openDivideModal('${m.fecha}', '${m.descripcion.replace(/'/g, "\\'")}', ${m.monto}, ${m.isUsd || false})">
-                            Dividir
+                        <button class="btn btn-primary btn-sm" onclick="openDivideModal('${m.fecha}', '${m.descripcion.replace(/'/g, "\\'")}', ${m.monto}, ${m.isUsd || false}, ${m.miParte !== undefined && m.miParte !== null ? m.miParte : 'null'})">
+                            Editar mi parte
                         </button>
                     </td>
                 `;
@@ -83,12 +86,26 @@ const modal = document.getElementById('divide-modal');
 const closeBtn = document.getElementById('close-modal');
 const form = document.getElementById('divide-form');
 
-window.openDivideModal = (fecha, descripcion, monto, isUsd = false) => {
+window.openDivideModal = (fecha, descripcion, monto, isUsd = false, miParteActual = null) => {
     document.getElementById('modal-desc').textContent = descripcion;
     document.getElementById('modal-monto').textContent = `Monto Original: ${formatCurrency(monto, isUsd)}`;
     document.getElementById('input-fecha').value = fecha;
     document.getElementById('input-monto').value = monto;
-    document.getElementById('input-personas').value = '1';
+    document.getElementById('input-is-usd').value = isUsd ? '1' : '0';
+
+    const absMonto = Math.abs(monto);
+    const miParteInput = document.getElementById('input-mi-parte');
+    miParteInput.value = miParteActual !== null ? Math.abs(miParteActual) : (absMonto / 2).toFixed(2);
+
+    const hint = document.getElementById('hint-presets');
+    const div2 = (absMonto / 2).toFixed(2);
+    const div3 = (absMonto / 3).toFixed(2);
+    const div4 = (absMonto / 4).toFixed(2);
+    hint.innerHTML = `Presets: <a href="#" data-v="${div2}">÷2 (${div2})</a> · <a href="#" data-v="${div3}">÷3 (${div3})</a> · <a href="#" data-v="${div4}">÷4 (${div4})</a>`;
+    hint.querySelectorAll('a').forEach(a => {
+        a.onclick = (ev) => { ev.preventDefault(); miParteInput.value = a.dataset.v; };
+    });
+
     modal.classList.add('active');
 };
 
@@ -103,7 +120,9 @@ form.onsubmit = async (e) => {
     e.preventDefault();
     const fecha = document.getElementById('input-fecha').value;
     const montoOriginal = parseFloat(document.getElementById('input-monto').value);
-    const divididoEn = parseInt(document.getElementById('input-personas').value);
+    // El usuario ingresa positivo; persistimos con el mismo signo del original.
+    const miParteAbs = Math.abs(parseFloat(document.getElementById('input-mi-parte').value));
+    const miParte = montoOriginal < 0 ? -miParteAbs : miParteAbs;
 
     try {
         await fetch('/api/divisions', {
@@ -114,7 +133,7 @@ form.onsubmit = async (e) => {
             body: JSON.stringify({
                 fecha: fecha,
                 montoOriginal: montoOriginal,
-                divididoEn: divididoEn
+                miParte: miParte
             })
         });
 

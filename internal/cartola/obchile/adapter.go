@@ -64,10 +64,9 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 			continue
 		}
 
-		// 2. Usar shared para moneda y overrides
-		montoNormalizado := shared.NormalizarMonto(mov.Monto, a.tasaCambioUSD)
-		montoImputado := math.Abs(montoNormalizado)
-		montoImputado = shared.AplicarOverrides(montoImputado, mov.Monto, mov.Fecha, a.overrides)
+		// 2. Aplicar override (en cruda) y luego normalizar a CLP
+		montoCrudo := shared.AplicarOverrides(mov.Monto, mov.Fecha, a.overrides)
+		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, a.tasaCambioUSD))
 
 		// 3. Parsear Fecha
 		fechaTransaccion, err := time.Parse("02-01-2006", mov.Fecha)
