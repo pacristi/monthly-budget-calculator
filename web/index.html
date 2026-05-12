@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Budget Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1>Budget Dashboard</h1>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Resumen -->
+        <section class="summary-cards" id="summary-section">
+            <div class="card">
+                <h3>Sueldo Detectado</h3>
+                <p class="value" id="val-sueldo">--</p>
+            </div>
+            <div class="card">
+                <h3>Presupuesto Gastos</h3>
+                <p class="value" id="val-presupuesto">--</p>
+            </div>
+            <div class="card warning">
+                <h3>Carga Mensual</h3>
+                <p class="value" id="val-carga">--</p>
+            </div>
+            <div class="card highlight">
+                <h3>Disponible Restante</h3>
+                <p class="value" id="val-disponible">--</p>
+            </div>
+        </section>
+
+        <div class="grid">
+            <!-- Gastos Imputados -->
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Gastos en el Mes</h2>
+                </div>
+                <div class="panel-body">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Descripción</th>
+                                <th>Carga</th>
+                                <th>Cuotas</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gastos-tbody">
+                            <tr><td colspan="4" class="text-center">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Cartola (Movimientos) -->
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Movimientos Bancarios</h2>
+                </div>
+                <div class="panel-body">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Descripción</th>
+                                <th>Monto Original</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="movimientos-tbody">
+                            <tr><td colspan="4" class="text-center">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Modal para Dividir -->
+    <div class="modal" id="divide-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Dividir Gasto</h3>
+                <button class="close-btn" id="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="modal-desc">Descripción del gasto</p>
+                <p id="modal-monto">Monto: $0</p>
+                <form id="divide-form">
+                    <input type="hidden" id="input-fecha">
+                    <input type="hidden" id="input-monto">
+                    <div class="form-group">
+                        <label for="input-personas">Dividido en (personas/partes):</label>
+                        <input type="number" id="input-personas" min="1" max="100" value="1" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Guardar División</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

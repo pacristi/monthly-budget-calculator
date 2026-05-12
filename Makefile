@@ -30,6 +30,10 @@ run: ## Ejecuta la calculadora en Go sin compilar el binario
 	@echo "🧮 Calculando presupuesto..."
 	@go run $(MAIN_PATH) data/current.json data/divisiones.json
 
+serve: ## Levanta el servidor web con el dashboard
+	@echo "🌐 Levantando servidor en puerto 8085..."
+	@go run ./cmd/presupuesto-api data/current.json data/divisiones.json
+
 build: ## Compila el binario de Go para producción
 	@echo "🔨 Compilando binario..."
 	@mkdir -p $(BIN_DIR)
