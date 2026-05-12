@@ -118,11 +118,13 @@
                 <form id="divide-form">
                     <input type="hidden" id="input-fecha">
                     <input type="hidden" id="input-monto">
+                    <input type="hidden" id="input-is-usd">
                     <div class="form-group">
-                        <label for="input-personas">Dividido en (personas/partes):</label>
-                        <input type="number" id="input-personas" min="1" max="100" value="1" required>
+                        <label for="input-mi-parte">Lo que pagué (en la moneda original):</label>
+                        <input type="number" id="input-mi-parte" step="0.01" min="0" required>
+                        <small id="hint-presets" style="display:block; margin-top:0.4rem; color:#666;"></small>
                     </div>
-                    <button type="submit" class="btn btn-primary">Guardar División</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
                 </form>
             </div>
         </div>
