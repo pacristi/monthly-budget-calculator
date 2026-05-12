@@ -1,8 +1,11 @@
 package obchile
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"math"
+	"os"
 	"strings"
 	"time"
 
@@ -14,16 +17,18 @@ import (
 type Adapter struct {
 	client          *Client
 	overrides       []shared.Override
+	rutaManuales    string
 	tasaCambioUSD   float64
 	diaCorteCredito int
 }
 
-func NewAdapter(rutaJson string, rutaDivisiones string, tasaCambioUSD float64, diaCorteCredito int) *Adapter {
+func NewAdapter(rutaJson string, rutaDivisiones string, rutaManuales string, tasaCambioUSD float64, diaCorteCredito int) *Adapter {
 	overrides, _ := shared.LeerOverrides(rutaDivisiones)
 	
 	return &Adapter{
 		client:          NewClient(rutaJson),
 		overrides:       overrides,
+		rutaManuales:    rutaManuales,
 		tasaCambioUSD:   tasaCambioUSD,
 		diaCorteCredito: diaCorteCredito,
 	}
@@ -95,5 +100,60 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 		})
 	}
 
+	gastosManuales := a.leerGastosManuales()
+	gastos = append(gastos, gastosManuales...)
+
 	return gastos, nil
+}
+
+func (a *Adapter) leerGastosManuales() []presupuesto.Gasto {
+	if a.rutaManuales == "" {
+		return nil
+	}
+
+	f, err := os.Open(a.rutaManuales)
+	if err != nil {
+		// Manejar gracefully si el archivo no existe
+		return nil
+	}
+	defer f.Close()
+
+	bytes, err := io.ReadAll(f)
+	if err != nil {
+		return nil
+	}
+
+	var dtos []GastoManualDTO
+	if err := json.Unmarshal(bytes, &dtos); err != nil {
+		return nil
+	}
+
+	var gastos []presupuesto.Gasto
+	for _, dto := range dtos {
+		fechaTransaccion, err := time.Parse("02-01-2006", dto.FechaInicio)
+		if err != nil {
+			continue
+		}
+
+		tipoPago := presupuesto.Debito
+		diaCorte := 0
+		if strings.ToLower(dto.TipoPago) == "credito" {
+			tipoPago = presupuesto.Credito
+			diaCorte = a.diaCorteCredito
+		}
+
+		gastos = append(gastos, presupuesto.Gasto{
+			ID:               dto.ID,
+			Descripcion:      dto.Descripcion,
+			MontoImputado:    dto.MontoTotal,
+			Cuotas:           dto.CuotasTotales,
+			FechaTransaccion: fechaTransaccion,
+			PoliticaCorte: presupuesto.PoliticaCorte{
+				Tipo:       tipoPago,
+				DiaDeCorte: diaCorte,
+			},
+		})
+	}
+
+	return gastos
 }

@@ -51,7 +51,7 @@ func main() {
 	}
 
 	// Inicializar adaptador
-	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, tasaCambioUSD, diaCorteCredito)
+	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", tasaCambioUSD, diaCorteCredito)
 
 	// Inicializar calculadora (asumimos que el porcentaje disponible para gasto es 30%)
 	porcentajeParaGastos := 0.25

@@ -77,7 +77,7 @@ func getConfig() (float64, int, float64) {
 func handleBudget(w http.ResponseWriter, r *http.Request) {
 	tasaCambioUSD, diaCorteCredito, porcentajeParaGastos := getConfig()
 
-	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, tasaCambioUSD, diaCorteCredito)
+	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", tasaCambioUSD, diaCorteCredito)
 	calc := presupuesto.NewCalculadora(adaptador, porcentajeParaGastos)
 
 	ahora := time.Now()

@@ -1,4 +1,5 @@
 data/*.json
+data/*.log
 data/archive/
 ingest/node_modules/
 .env
