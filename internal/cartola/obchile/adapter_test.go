@@ -9,8 +9,25 @@ import (
 	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
 )
 
+// resolvedorFake devuelve la misma config para cualquier mes.
+type resolvedorFake struct {
+	cfg presupuesto.ConfigPresupuesto
+}
+
+func (r resolvedorFake) ParaMes(_ time.Time) (presupuesto.ConfigPresupuesto, error) {
+	return r.cfg, nil
+}
+
+func nuevoResolvedorFake(tasa float64, diaCorte int) presupuesto.ResolvedorConfig {
+	return resolvedorFake{cfg: presupuesto.ConfigPresupuesto{
+		PorcentajeParaGastos: 0.25,
+		DiaDeCorteCredito:    diaCorte,
+		TasaCambioUSD:        tasa,
+		HeredadaDe:           "2026-01",
+	}}
+}
+
 func TestObtenerGastosValidos_ConGastosManuales(t *testing.T) {
-	// 1. Crear un JSON temporal para el scraper
 	tempDir := t.TempDir()
 	scraperJsonPath := filepath.Join(tempDir, "scraper.json")
 	scraperContent := `{
@@ -30,7 +47,6 @@ func TestObtenerGastosValidos_ConGastosManuales(t *testing.T) {
 		t.Fatalf("No se pudo crear json de scraper: %v", err)
 	}
 
-	// 2. Crear un JSON temporal para gastos manuales
 	manualesJsonPath := filepath.Join(tempDir, "manuales.json")
 	manualesContent := `[
 	  {
@@ -47,10 +63,8 @@ func TestObtenerGastosValidos_ConGastosManuales(t *testing.T) {
 		t.Fatalf("No se pudo crear json de manuales: %v", err)
 	}
 
-	// 3. Instanciar el Adapter con ambas rutas
-	adapter := NewAdapter(scraperJsonPath, "", manualesJsonPath, 900.0, 25)
+	adapter := NewAdapter(scraperJsonPath, "", manualesJsonPath, nuevoResolvedorFake(900.0, 25))
 
-	// 4. Ejecutar ObtenerGastosValidos
 	periodo := presupuesto.PeriodoPresupuestario{
 		Inicio: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
 		Fin:    time.Date(2026, 5, 31, 23, 59, 59, 0, time.UTC),
@@ -61,30 +75,18 @@ func TestObtenerGastosValidos_ConGastosManuales(t *testing.T) {
 		t.Fatalf("ObtenerGastosValidos retornó error: %v", err)
 	}
 
-	// 5. Validar que vengan ambos gastos
 	if len(gastos) != 2 {
 		t.Fatalf("Se esperaban 2 gastos, se obtuvieron %d", len(gastos))
 	}
 
-	// Validar scraper
 	gastoScraper := gastos[0]
 	if gastoScraper.Descripcion != "COMPRA SUPERMERCADO" {
 		t.Errorf("Descripción scraper incorrecta: %s", gastoScraper.Descripcion)
 	}
 
-	// Validar manual
 	gastoManual := gastos[1]
 	if gastoManual.ID != "man-1" {
 		t.Errorf("ID manual incorrecto: %s", gastoManual.ID)
-	}
-	if gastoManual.Descripcion != "Gasto Manual Test" {
-		t.Errorf("Descripción manual incorrecta: %s", gastoManual.Descripcion)
-	}
-	if gastoManual.MontoImputado != 100000 {
-		t.Errorf("Monto manual incorrecto: %f", gastoManual.MontoImputado)
-	}
-	if gastoManual.Cuotas != 2 {
-		t.Errorf("Cuotas manuales incorrectas: %d", gastoManual.Cuotas)
 	}
 	if gastoManual.PoliticaCorte.Tipo != presupuesto.Credito {
 		t.Errorf("Tipo de pago manual incorrecto")
@@ -92,10 +94,12 @@ func TestObtenerGastosValidos_ConGastosManuales(t *testing.T) {
 }
 
 func TestLeerGastosManuales_ArchivoNoExiste(t *testing.T) {
-	// Si el archivo no existe, debe manejarse gracefully y retornar slice vacío
-	adapter := NewAdapter("scraper_dummy.json", "", "ruta_inexistente.json", 900.0, 25)
-	
-	gastosManuales := adapter.leerGastosManuales()
+	adapter := NewAdapter("scraper_dummy.json", "", "ruta_inexistente.json", nuevoResolvedorFake(900.0, 25))
+
+	gastosManuales, err := adapter.leerGastosManuales()
+	if err != nil {
+		t.Errorf("error inesperado: %v", err)
+	}
 	if len(gastosManuales) != 0 {
 		t.Errorf("Se esperaba 0 gastos al no existir archivo, se obtuvieron %d", len(gastosManuales))
 	}

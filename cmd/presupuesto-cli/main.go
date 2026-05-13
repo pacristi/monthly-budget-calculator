@@ -4,26 +4,25 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
+	"github.com/pierocristi/monthly-budget-calculator/internal/config"
 	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
 )
 
 func main() {
-	// Cargar variables de entorno (silencioso si no existe el archivo .env)
 	_ = godotenv.Load()
 
 	detalleFlag := flag.Bool("detalle", false, "Mostrar la lista de gastos que impactan este mes")
 	proyectarFlag := flag.Int("proyectar", 0, "Proyectar la carga de gastos para los próximos N meses")
+	rutaConfigsFlag := flag.String("configs", "data/configs-mensuales.json", "Ruta del archivo de configs mensuales")
 	flag.Parse()
 
 	args := flag.Args()
 	if len(args) < 1 {
-		log.Fatalf("Uso: presupuesto-cli [--detalle] <ruta_archivo_json> [ruta_archivo_divisiones]")
+		log.Fatalf("Uso: presupuesto-cli [--detalle] [--proyectar N] [--configs <ruta>] <ruta_archivo_json> [ruta_archivo_divisiones]")
 	}
 
 	rutaJson := args[0]
@@ -35,34 +34,23 @@ func main() {
 	fmt.Printf("Iniciando Calculadora de Presupuesto Mensual\n")
 	fmt.Printf("Leyendo datos de: %s\n", rutaJson)
 
-	// Valores por defecto
-	tasaCambioUSD := 950.0
-	diaCorteCredito := 25
-
-	if val := os.Getenv("TASA_CAMBIO_USD"); val != "" {
-		if parsed, err := strconv.ParseFloat(val, 64); err == nil {
-			tasaCambioUSD = parsed
-		}
+	repoConfigs := config.NewRepoJSON(*rutaConfigsFlag)
+	if err := config.EnsureSeed(repoConfigs, config.SeedPorDefecto(time.Now())); err != nil {
+		log.Fatalf("inicializando configs: %v", err)
 	}
 
-	if val := os.Getenv("DIA_CORTE_CREDITO"); val != "" {
-		if parsed, err := strconv.Atoi(val); err == nil {
-			diaCorteCredito = parsed
-		}
-	}
+	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", repoConfigs)
+	calc := presupuesto.NewCalculadora(adaptador, repoConfigs)
 
-	// Inicializar adaptador
-	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", tasaCambioUSD, diaCorteCredito)
-
-	// Inicializar calculadora (asumimos que el porcentaje disponible para gasto es 30%)
-	porcentajeParaGastos := 0.25
-	calc := presupuesto.NewCalculadora(adaptador, porcentajeParaGastos)
-
-	// Definir periodo actual (por ejemplo, el mes en curso)
 	ahora := time.Now()
 	periodo := presupuesto.PeriodoPresupuestario{
 		Inicio: time.Date(ahora.Year(), ahora.Month(), 1, 0, 0, 0, 0, ahora.Location()),
 		Fin:    time.Date(ahora.Year(), ahora.Month()+1, 1, 0, 0, 0, 0, ahora.Location()).Add(-time.Nanosecond),
+	}
+
+	cfg, err := repoConfigs.ParaMes(periodo.Inicio)
+	if err != nil {
+		log.Fatalf("Error resolviendo config del mes: %v", err)
 	}
 
 	disponible, err := calc.CalcularDisponible(periodo)
@@ -89,14 +77,16 @@ func main() {
 		fmt.Println("--------------------------------------------")
 	}
 
-	fmt.Printf("Presupuesto para gastos (%.0f%%): $%.0f\n", porcentajeParaGastos*100, sueldo*porcentajeParaGastos)
-	fmt.Printf("Carga de gastos actual en el mes: $%.0f\n", (sueldo*porcentajeParaGastos)-disponible)
+	fmt.Printf("Config del mes (heredada de %s): gasto %.0f%% · día corte %d · USD %.0f\n",
+		cfg.HeredadaDe, cfg.PorcentajeParaGastos*100, cfg.DiaDeCorteCredito, cfg.TasaCambioUSD)
+	fmt.Printf("Presupuesto para gastos (%.0f%%): $%.0f\n", cfg.PorcentajeParaGastos*100, sueldo*cfg.PorcentajeParaGastos)
+	fmt.Printf("Carga de gastos actual en el mes: $%.0f\n", (sueldo*cfg.PorcentajeParaGastos)-disponible)
 	fmt.Println("--------------------------------------------------")
 	fmt.Printf("DISPONIBLE RESTANTE PARA EL MES: $%.0f\n", disponible)
 
 	if *proyectarFlag > 0 {
 		fmt.Println("\n=== Proyección de Pasivos ===")
-		gastos, err := adaptador.ObtenerGastosValidos(periodo) // El adaptador ignora el periodo para devolver todos
+		gastos, err := adaptador.ObtenerGastosValidos(periodo)
 		if err != nil {
 			fmt.Printf("Error obteniendo gastos para proyectar: %v\n", err)
 		} else {

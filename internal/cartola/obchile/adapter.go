@@ -15,22 +15,20 @@ import (
 
 // Adapter implementa presupuesto.ProveedorFinanciero para OBCL.
 type Adapter struct {
-	client          *Client
-	overrides       []shared.Override
-	rutaManuales    string
-	tasaCambioUSD   float64
-	diaCorteCredito int
+	client       *Client
+	overrides    []shared.Override
+	rutaManuales string
+	resolvedor   presupuesto.ResolvedorConfig
 }
 
-func NewAdapter(rutaJson string, rutaDivisiones string, rutaManuales string, tasaCambioUSD float64, diaCorteCredito int) *Adapter {
+func NewAdapter(rutaJson string, rutaDivisiones string, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
 	overrides, _ := shared.LeerOverrides(rutaDivisiones)
-	
+
 	return &Adapter{
-		client:          NewClient(rutaJson),
-		overrides:       overrides,
-		rutaManuales:    rutaManuales,
-		tasaCambioUSD:   tasaCambioUSD,
-		diaCorteCredito: diaCorteCredito,
+		client:       NewClient(rutaJson),
+		overrides:    overrides,
+		rutaManuales: rutaManuales,
+		resolvedor:   resolvedor,
 	}
 }
 
@@ -64,28 +62,32 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 			continue
 		}
 
-		// 2. Aplicar override (en cruda) y luego normalizar a CLP
-		montoCrudo := shared.AplicarOverrides(mov.Monto, mov.Fecha, a.overrides)
-		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, a.tasaCambioUSD))
-
-		// 3. Parsear Fecha
+		// 2. Parsear fecha (necesaria para resolver la config del mes del movimiento)
 		fechaTransaccion, err := time.Parse("02-01-2006", mov.Fecha)
 		if err != nil {
-			continue // Ignorar fechas inválidas
+			continue
 		}
 
-		// 4. Determinar política de corte
+		cfg, err := a.resolvedor.ParaMes(fechaTransaccion)
+		if err != nil {
+			return nil, fmt.Errorf("resolviendo config para %s: %w", mov.Fecha, err)
+		}
+
+		// 3. Aplicar override (en cruda) y luego normalizar a CLP con tasa del mes
+		montoCrudo := shared.AplicarOverrides(mov.Monto, mov.Fecha, a.overrides)
+		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, cfg.TasaCambioUSD))
+
+		// 4. Determinar política de corte (día de corte del mes del movimiento)
 		tipoPago := presupuesto.Debito
 		diaCorte := 0
 		sourceLower := strings.ToLower(mov.Source)
 		if strings.Contains(sourceLower, "credito") || strings.Contains(sourceLower, "credit_card") {
 			tipoPago = presupuesto.Credito
-			diaCorte = a.diaCorteCredito
+			diaCorte = cfg.DiaDeCorteCredito
 		}
 
 		cuotas := shared.ParsearCuotas(mov.Installments)
 
-		// 5. Instanciar Entidad de Dominio
 		gastos = append(gastos, presupuesto.Gasto{
 			ID:               fmt.Sprintf("mov-%s-%d", fechaTransaccion.Format("20060102"), i),
 			Descripcion:      mov.Descripcion,
@@ -99,32 +101,34 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 		})
 	}
 
-	gastosManuales := a.leerGastosManuales()
+	gastosManuales, err := a.leerGastosManuales()
+	if err != nil {
+		return nil, err
+	}
 	gastos = append(gastos, gastosManuales...)
 
 	return gastos, nil
 }
 
-func (a *Adapter) leerGastosManuales() []presupuesto.Gasto {
+func (a *Adapter) leerGastosManuales() ([]presupuesto.Gasto, error) {
 	if a.rutaManuales == "" {
-		return nil
+		return nil, nil
 	}
 
 	f, err := os.Open(a.rutaManuales)
 	if err != nil {
-		// Manejar gracefully si el archivo no existe
-		return nil
+		return nil, nil
 	}
 	defer f.Close()
 
 	bytes, err := io.ReadAll(f)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 
 	var dtos []GastoManualDTO
 	if err := json.Unmarshal(bytes, &dtos); err != nil {
-		return nil
+		return nil, nil
 	}
 
 	var gastos []presupuesto.Gasto
@@ -134,11 +138,16 @@ func (a *Adapter) leerGastosManuales() []presupuesto.Gasto {
 			continue
 		}
 
+		cfg, err := a.resolvedor.ParaMes(fechaTransaccion)
+		if err != nil {
+			return nil, fmt.Errorf("resolviendo config para gasto manual %s: %w", dto.ID, err)
+		}
+
 		tipoPago := presupuesto.Debito
 		diaCorte := 0
 		if strings.ToLower(dto.TipoPago) == "credito" {
 			tipoPago = presupuesto.Credito
-			diaCorte = a.diaCorteCredito
+			diaCorte = cfg.DiaDeCorteCredito
 		}
 
 		gastos = append(gastos, presupuesto.Gasto{
@@ -154,5 +163,5 @@ func (a *Adapter) leerGastosManuales() []presupuesto.Gasto {
 		})
 	}
 
-	return gastos
+	return gastos, nil
 }
