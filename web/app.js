@@ -48,7 +48,8 @@ const loadBudget = async () => {
         if (!data.gastos || data.gastos.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center">No hay gastos para este mes.</td></tr>';
         } else {
-            data.gastos.forEach(g => {
+            const gastosOrdenados = [...data.gastos].sort((a, b) => b.fecha.localeCompare(a.fecha));
+            gastosOrdenados.forEach(g => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${g.fecha}</td>
@@ -76,7 +77,8 @@ const loadMovements = async () => {
         if (!data || data.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center">No hay movimientos.</td></tr>';
         } else {
-            data.forEach(m => {
+            const movimientosOrdenados = [...data].sort((a, b) => b.fecha.localeCompare(a.fecha));
+            movimientosOrdenados.forEach(m => {
                 const tr = document.createElement('tr');
                 let badge = '';
                 if (m.miParte !== undefined && m.miParte !== null && m.miParte !== m.monto) {
