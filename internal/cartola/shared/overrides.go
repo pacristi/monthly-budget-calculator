@@ -8,7 +8,7 @@ import (
 // Override representa lo que efectivamente me tocó pagar de un movimiento,
 // en la misma moneda y signo que el monto original (cruda).
 type Override struct {
-	Fecha         string  `json:"fecha"`
+	Fecha         string  `json:"fecha"` // Formato ISO: yyyy-mm-dd
 	MontoOriginal float64 `json:"montoOriginal"`
 	MiParte       float64 `json:"miParte"`
 }
@@ -32,9 +32,10 @@ func LeerOverrides(ruta string) ([]Override, error) {
 
 // AplicarOverrides devuelve el monto crudo a imputar: "mi parte" si hay
 // override registrado para (fecha, montoOriginal), o el monto original tal cual.
-func AplicarOverrides(montoOriginal float64, fechaCruda string, overrides []Override) float64 {
+// La fecha debe venir en ISO (yyyy-mm-dd), igual que como se almacena en disco.
+func AplicarOverrides(montoOriginal float64, fechaISO string, overrides []Override) float64 {
 	for _, o := range overrides {
-		if o.Fecha == fechaCruda && o.MontoOriginal == montoOriginal {
+		if o.Fecha == fechaISO && o.MontoOriginal == montoOriginal {
 			return o.MiParte
 		}
 	}

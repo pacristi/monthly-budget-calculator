@@ -1,7 +1,6 @@
-const fechaParaOrdenar = (f) => {
-    if (/^\d{4}-\d{2}-\d{2}/.test(f)) return f;
-    const m = f.match(/^(\d{2})-(\d{2})-(\d{4})/);
-    return m ? `${m[3]}-${m[2]}-${m[1]}` : f;
+const formatFecha = (iso) => {
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : iso;
 };
 
 const formatCurrency = (value, isUSD = false) => {
@@ -54,11 +53,11 @@ const loadBudget = async () => {
         if (!data.gastos || data.gastos.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center">No hay gastos para este mes.</td></tr>';
         } else {
-            const gastosOrdenados = [...data.gastos].sort((a, b) => fechaParaOrdenar(b.fecha).localeCompare(fechaParaOrdenar(a.fecha)));
+            const gastosOrdenados = [...data.gastos].sort((a, b) => b.fecha.localeCompare(a.fecha));
             gastosOrdenados.forEach(g => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${g.fecha}</td>
+                    <td>${formatFecha(g.fecha)}</td>
                     <td>${g.descripcion}</td>
                     <td>${formatCurrency(g.carga)}</td>
                     <td>${g.cuotas > 1 ? g.cuotas : '1'}</td>
@@ -83,7 +82,7 @@ const loadMovements = async () => {
         if (!data || data.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center">No hay movimientos.</td></tr>';
         } else {
-            const movimientosOrdenados = [...data].sort((a, b) => fechaParaOrdenar(b.fecha).localeCompare(fechaParaOrdenar(a.fecha)));
+            const movimientosOrdenados = [...data].sort((a, b) => b.fecha.localeCompare(a.fecha));
             movimientosOrdenados.forEach(m => {
                 const tr = document.createElement('tr');
                 let badge = '';
@@ -91,7 +90,7 @@ const loadMovements = async () => {
                     badge = `<span class="badge">mi parte: ${formatCurrency(Math.abs(m.miParte), m.isUsd)}</span>`;
                 }
                 tr.innerHTML = `
-                    <td>${m.fecha}</td>
+                    <td>${formatFecha(m.fecha)}</td>
                     <td>${m.descripcion} ${badge}</td>
                     <td>${formatCurrency(m.monto, m.isUsd)}</td>
                     <td>

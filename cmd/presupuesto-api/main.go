@@ -113,7 +113,7 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 		if carga > 0 {
 			cargaTotal += carga
 			detalles = append(detalles, GastoDetalle{
-				Fecha:       g.FechaTransaccion.Format("02-01-2006"),
+				Fecha:       g.FechaTransaccion.Format("2006-01-02"),
 				Descripcion: g.Descripcion,
 				Carga:       carga,
 				Cuotas:      g.Cuotas,
@@ -207,9 +207,15 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		fechaT, err := time.Parse("02-01-2006", m.Fecha)
+		if err != nil {
+			continue
+		}
+		fechaISO := fechaT.Format("2006-01-02")
+
 		var miParte *float64
 		for _, o := range overrides {
-			if o.Fecha == m.Fecha && o.MontoOriginal == m.Monto {
+			if o.Fecha == fechaISO && o.MontoOriginal == m.Monto {
 				v := o.MiParte
 				miParte = &v
 				break
@@ -222,7 +228,7 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 		}
 
 		result = append(result, MovimientoRes{
-			Fecha:       m.Fecha,
+			Fecha:       fechaISO,
 			Descripcion: m.Descripcion,
 			Monto:       m.Monto,
 			IsUSD:       isUsd,
