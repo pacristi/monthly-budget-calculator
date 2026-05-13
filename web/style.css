@@ -283,3 +283,159 @@ body {
     outline: none;
     border-color: var(--accent);
 }
+
+/* ===== Nav tabs ===== */
+.header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.nav-tabs {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.nav-tab {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.nav-tab:hover {
+    color: var(--text-primary);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.nav-tab.active {
+    color: var(--text-primary);
+    background-color: var(--accent);
+    border-color: var(--accent);
+}
+
+.header-actions input[type="month"] {
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background-color: rgba(0,0,0,0.2);
+    color: var(--text-primary);
+}
+
+.hidden {
+    display: none !important;
+}
+
+.view {
+    margin-top: 0;
+}
+
+/* ===== Config widget en dashboard ===== */
+.config-widget {
+    background-color: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 2rem;
+    font-size: 0.875rem;
+}
+
+.config-widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.config-widget-title {
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+}
+
+.config-widget-source {
+    font-size: 0.75rem;
+    color: var(--success);
+    background-color: rgba(16, 185, 129, 0.1);
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.config-widget-source.inherited {
+    color: var(--warning);
+    background-color: rgba(245, 158, 11, 0.1);
+}
+
+.config-widget-values {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    color: var(--text-primary);
+}
+
+.config-widget-values strong {
+    color: var(--accent);
+}
+
+/* ===== Página configs ===== */
+.configs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.configs-help {
+    padding: 1rem 1.5rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    background-color: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid var(--border);
+}
+
+.configs-help strong {
+    color: var(--text-primary);
+}
+
+.data-table td.actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn-danger {
+    background-color: var(--danger);
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #b91c1c;
+}
+
+.modal-disclaimer {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0.75rem;
+    background-color: rgba(245, 158, 11, 0.1);
+    border-left: 3px solid var(--warning);
+    border-radius: 0.25rem;
+}
+
+.modal-disclaimer strong {
+    color: var(--text-primary);
+}
+
+.config-form-error {
+    display: block;
+    margin-top: 0.75rem;
+    color: var(--danger);
+    font-size: 0.85rem;
+}

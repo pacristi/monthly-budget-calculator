@@ -13,29 +13,37 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/shared"
+	"github.com/pierocristi/monthly-budget-calculator/internal/config"
 	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
 )
 
 var (
 	rutaJson       string
 	rutaDivisiones string
+	repoConfigs    *config.RepoJSON
 )
 
 func main() {
 	_ = godotenv.Load()
 
 	port := flag.String("port", "8085", "Puerto para el servidor web")
+	rutaConfigsFlag := flag.String("configs", "data/configs-mensuales.json", "Ruta del archivo de configs mensuales")
 	flag.Parse()
 
 	args := flag.Args()
 	if len(args) < 1 {
-		log.Fatalf("Uso: presupuesto-api <ruta_archivo_json> [ruta_archivo_divisiones]")
+		log.Fatalf("Uso: presupuesto-api [--configs <ruta>] <ruta_archivo_json> [ruta_archivo_divisiones]")
 	}
 
 	rutaJson = args[0]
 	rutaDivisiones = ""
 	if len(args) > 1 {
 		rutaDivisiones = args[1]
+	}
+
+	repoConfigs = config.NewRepoJSON(*rutaConfigsFlag)
+	if err := config.EnsureSeed(repoConfigs, config.SeedPorDefecto(time.Now())); err != nil {
+		log.Fatalf("inicializando configs: %v", err)
 	}
 
 	// Servir archivos estáticos
@@ -47,43 +55,19 @@ func main() {
 	http.HandleFunc("/api/projections", handleProjections)
 	http.HandleFunc("/api/movements", handleMovements)
 	http.HandleFunc("/api/divisions", handleDivisions)
+	http.HandleFunc("/api/configs", handlerListar(repoConfigs))
+	http.HandleFunc("/api/configs/", handlerSubconfigs(repoConfigs))
 
 	fmt.Printf("Servidor iniciado en http://localhost:%s\n", *port)
 	log.Fatal(http.ListenAndServe(":"+*port, nil))
 }
 
-func getConfig() (float64, int, float64) {
-	tasaCambioUSD := 950.0
-	diaCorteCredito := 25
-	porcentajeParaGastos := 0.25
-
-	if val := os.Getenv("TASA_CAMBIO_USD"); val != "" {
-		if parsed, err := strconv.ParseFloat(val, 64); err == nil {
-			tasaCambioUSD = parsed
-		}
-	}
-	if val := os.Getenv("DIA_CORTE_CREDITO"); val != "" {
-		if parsed, err := strconv.Atoi(val); err == nil {
-			diaCorteCredito = parsed
-		}
-	}
-	if val := os.Getenv("PORCENTAJE_GASTOS"); val != "" {
-		if parsed, err := strconv.ParseFloat(val, 64); err == nil {
-			porcentajeParaGastos = parsed
-		}
-	}
-	return tasaCambioUSD, diaCorteCredito, porcentajeParaGastos
-}
-
 func handleBudget(w http.ResponseWriter, r *http.Request) {
-	tasaCambioUSD, diaCorteCredito, porcentajeParaGastos := getConfig()
-
-	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", tasaCambioUSD, diaCorteCredito)
-	calc := presupuesto.NewCalculadora(adaptador, porcentajeParaGastos)
+	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", repoConfigs)
+	calc := presupuesto.NewCalculadora(adaptador, repoConfigs)
 
 	ahora := time.Now()
-	
-	// Permitir sobreescribir mes y año mediante query params
+
 	if mStr := r.URL.Query().Get("month"); mStr != "" {
 		if m, err := strconv.Atoi(mStr); err == nil && m >= 1 && m <= 12 {
 			ahora = time.Date(ahora.Year(), time.Month(m), 1, 0, 0, 0, 0, ahora.Location())
@@ -100,6 +84,12 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 		Fin:    time.Date(ahora.Year(), ahora.Month()+1, 1, 0, 0, 0, 0, ahora.Location()).Add(-time.Nanosecond),
 	}
 
+	cfg, err := repoConfigs.ParaMes(periodo.Inicio)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	disponible, err := calc.CalcularDisponible(periodo)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -108,15 +98,14 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 
 	sueldo, _ := adaptador.ObtenerSueldoBase(periodo)
 	gastos, _ := adaptador.ObtenerGastosValidos(periodo)
-	
-	// Filtramos solo los gastos que tienen carga en este periodo para pasarlos al front
+
 	type GastoDetalle struct {
 		Fecha       string  `json:"fecha"`
 		Descripcion string  `json:"descripcion"`
 		Carga       float64 `json:"carga"`
 		Cuotas      int     `json:"cuotas"`
 	}
-	
+
 	var cargaTotal float64
 	var detalles []GastoDetalle
 	for _, g := range gastos {
@@ -132,7 +121,7 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	presupuestoTotal := sueldo * porcentajeParaGastos
+	presupuestoTotal := sueldo * cfg.PorcentajeParaGastos
 
 	response := map[string]interface{}{
 		"sueldo":            sueldo,
@@ -140,6 +129,7 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 		"carga_actual":      cargaTotal,
 		"disponible":        disponible,
 		"gastos":            detalles,
+		"config":            cfg,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -147,11 +137,9 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleProjections(w http.ResponseWriter, r *http.Request) {
-	tasaCambioUSD, diaCorteCredito, _ := getConfig()
+	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", repoConfigs)
 
-	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", tasaCambioUSD, diaCorteCredito)
-	
-	mesesHaciaAdelante := 6 // default
+	mesesHaciaAdelante := 6
 	if mStr := r.URL.Query().Get("months"); mStr != "" {
 		if m, err := strconv.Atoi(mStr); err == nil && m > 0 {
 			mesesHaciaAdelante = m
@@ -195,7 +183,6 @@ func handleProjections(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
-
 func handleMovements(w http.ResponseWriter, r *http.Request) {
 	client := obchile.NewClient(rutaJson)
 	movs, err := client.Fetch()
@@ -204,7 +191,6 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Opcional: Obtener overrides para marcar cuáles ya están divididos
 	overrides, _ := shared.LeerOverrides(rutaDivisiones)
 
 	type MovimientoRes struct {
@@ -218,7 +204,7 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 	var result []MovimientoRes
 	for _, m := range movs {
 		if m.Monto >= 0 {
-			continue // Solo mostramos gastos (negativos)
+			continue
 		}
 
 		var miParte *float64
@@ -230,7 +216,6 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Chequear si es USD mediante heurística de decimales
 		isUsd := false
 		if float64(int64(m.Monto)) != m.Monto {
 			isUsd = true

@@ -2,19 +2,25 @@ package presupuesto
 
 type Calculadora struct {
 	proveedor  ProveedorFinanciero
-	porcentaje float64 // Inyectado desde config/env
+	resolvedor ResolvedorConfig
 }
 
 // NewCalculadora crea una nueva instancia de la calculadora.
-func NewCalculadora(proveedor ProveedorFinanciero, porcentaje float64) *Calculadora {
+// El porcentaje aplicable se resuelve del mes del periodo evaluado.
+func NewCalculadora(proveedor ProveedorFinanciero, resolvedor ResolvedorConfig) *Calculadora {
 	return &Calculadora{
 		proveedor:  proveedor,
-		porcentaje: porcentaje,
+		resolvedor: resolvedor,
 	}
 }
 
-// CalcularDisponible resuelve: (X * porcentaje) - Y
+// CalcularDisponible resuelve: (X * porcentajeDelMes) - Y
 func (c *Calculadora) CalcularDisponible(periodo PeriodoPresupuestario) (float64, error) {
+	cfg, err := c.resolvedor.ParaMes(periodo.Inicio)
+	if err != nil {
+		return 0, err
+	}
+
 	sueldo, err := c.proveedor.ObtenerSueldoBase(periodo)
 	if err != nil {
 		return 0, err
@@ -30,5 +36,5 @@ func (c *Calculadora) CalcularDisponible(periodo PeriodoPresupuestario) (float64
 		cargaMensualTotal += gasto.CalcularCargaParaPeriodo(periodo)
 	}
 
-	return (sueldo * c.porcentaje) - cargaMensualTotal, nil
+	return (sueldo * cfg.PorcentajeParaGastos) - cargaMensualTotal, nil
 }

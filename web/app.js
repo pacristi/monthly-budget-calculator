@@ -5,16 +5,34 @@ const formatCurrency = (value, isUSD = false) => {
     return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(value);
 };
 
+const renderConfigWidget = (cfg, mesSeleccionado) => {
+    if (!cfg) return;
+    document.getElementById('config-pct').textContent = `${(cfg.porcentajeParaGastos * 100).toFixed(0)}%`;
+    document.getElementById('config-corte').textContent = cfg.diaDeCorteCredito;
+    document.getElementById('config-usd').textContent = cfg.tasaCambioUSD;
+
+    const fuente = document.getElementById('config-source');
+    if (cfg.heredadaDe === mesSeleccionado) {
+        fuente.textContent = 'Config propia';
+        fuente.classList.remove('inherited');
+    } else {
+        fuente.textContent = `Heredada de ${cfg.heredadaDe}`;
+        fuente.classList.add('inherited');
+    }
+};
+
 // Fetch budget data and render summary/gastos
 const loadBudget = async () => {
     try {
         let url = '/api/budget';
+        let mesSeleccionado = null;
         const selector = document.getElementById('period-selector');
         if (selector && selector.value) {
             const [year, month] = selector.value.split('-');
             url += `?year=${year}&month=${month}`;
+            mesSeleccionado = selector.value;
         }
-        
+
         const response = await fetch(url);
         const data = await response.json();
 
@@ -22,6 +40,8 @@ const loadBudget = async () => {
         document.getElementById('val-presupuesto').textContent = formatCurrency(data.presupuesto_total);
         document.getElementById('val-carga').textContent = formatCurrency(data.carga_actual);
         document.getElementById('val-disponible').textContent = formatCurrency(data.disponible);
+
+        renderConfigWidget(data.config, mesSeleccionado);
 
         const tbody = document.getElementById('gastos-tbody');
         tbody.innerHTML = '';
@@ -81,7 +101,7 @@ const loadMovements = async () => {
     }
 };
 
-// Modal Logic
+// Modal Logic Dividir
 const modal = document.getElementById('divide-modal');
 const closeBtn = document.getElementById('close-modal');
 const form = document.getElementById('divide-form');
@@ -110,35 +130,26 @@ window.openDivideModal = (fecha, descripcion, monto, isUsd = false, miParteActua
 };
 
 closeBtn.onclick = () => modal.classList.remove('active');
-window.onclick = (e) => {
-    if (e.target == modal) {
-        modal.classList.remove('active');
-    }
-};
+window.addEventListener('click', (e) => {
+    if (e.target === modal) modal.classList.remove('active');
+    if (e.target === document.getElementById('config-modal')) document.getElementById('config-modal').classList.remove('active');
+});
 
 form.onsubmit = async (e) => {
     e.preventDefault();
     const fecha = document.getElementById('input-fecha').value;
     const montoOriginal = parseFloat(document.getElementById('input-monto').value);
-    // El usuario ingresa positivo; persistimos con el mismo signo del original.
     const miParteAbs = Math.abs(parseFloat(document.getElementById('input-mi-parte').value));
     const miParte = montoOriginal < 0 ? -miParteAbs : miParteAbs;
 
     try {
         await fetch('/api/divisions', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                fecha: fecha,
-                montoOriginal: montoOriginal,
-                miParte: miParte
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fecha, montoOriginal, miParte })
         });
 
         modal.classList.remove('active');
-        // Reload everything
         loadBudget();
         loadMovements();
     } catch (e) {
@@ -152,7 +163,7 @@ const loadProjections = async () => {
     try {
         const response = await fetch('/api/projections');
         const data = await response.json();
-        
+
         const tbody = document.getElementById('proyecciones-tbody');
         tbody.innerHTML = '';
         if (!data || data.length === 0) {
@@ -174,6 +185,134 @@ const loadProjections = async () => {
     }
 };
 
+// ======== Configs por mes ========
+
+const configsTbody = () => document.getElementById('configs-tbody');
+const configModal = document.getElementById('config-modal');
+const configForm = document.getElementById('config-form');
+const configError = document.getElementById('cfg-error');
+
+const loadConfigs = async () => {
+    try {
+        const response = await fetch('/api/configs');
+        const data = await response.json();
+        const tbody = configsTbody();
+        tbody.innerHTML = '';
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">Sin configs declaradas.</td></tr>';
+            return;
+        }
+        data.forEach(c => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${c.mesDesde}</td>
+                <td>${(c.porcentajeParaGastos * 100).toFixed(1)}%</td>
+                <td>${c.diaDeCorteCredito}</td>
+                <td>${c.tasaCambioUSD}</td>
+                <td class="actions">
+                    <button class="btn btn-sm btn-primary" data-action="edit" data-mes="${c.mesDesde}">Editar</button>
+                    <button class="btn btn-sm btn-danger" data-action="delete" data-mes="${c.mesDesde}">Eliminar</button>
+                </td>
+            `;
+            tr.querySelector('[data-action="edit"]').onclick = () => openConfigModal(c);
+            tr.querySelector('[data-action="delete"]').onclick = () => deleteConfig(c.mesDesde);
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        console.error('Error loading configs:', e);
+        configsTbody().innerHTML = '<tr><td colspan="5" class="text-center" style="color:red">Error cargando configs.</td></tr>';
+    }
+};
+
+const openConfigModal = (existente = null) => {
+    configError.textContent = '';
+    const mesInput = document.getElementById('cfg-mes');
+    if (existente) {
+        document.getElementById('config-modal-title').textContent = `Editar config (${existente.mesDesde})`;
+        mesInput.value = existente.mesDesde;
+        mesInput.readOnly = true;
+        document.getElementById('cfg-pct').value = (existente.porcentajeParaGastos * 100).toFixed(1);
+        document.getElementById('cfg-corte').value = existente.diaDeCorteCredito;
+        document.getElementById('cfg-usd').value = existente.tasaCambioUSD;
+    } else {
+        document.getElementById('config-modal-title').textContent = 'Nueva config mensual';
+        const now = new Date();
+        const yyyymm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        mesInput.value = yyyymm;
+        mesInput.readOnly = false;
+        document.getElementById('cfg-pct').value = '';
+        document.getElementById('cfg-corte').value = '';
+        document.getElementById('cfg-usd').value = '';
+    }
+    configModal.classList.add('active');
+};
+
+document.getElementById('close-config-modal').onclick = () => configModal.classList.remove('active');
+
+configForm.onsubmit = async (e) => {
+    e.preventDefault();
+    configError.textContent = '';
+    const mesDesde = document.getElementById('cfg-mes').value;
+    const payload = {
+        porcentajeParaGastos: parseFloat(document.getElementById('cfg-pct').value) / 100,
+        diaDeCorteCredito: parseInt(document.getElementById('cfg-corte').value, 10),
+        tasaCambioUSD: parseFloat(document.getElementById('cfg-usd').value),
+    };
+    try {
+        const res = await fetch(`/api/configs/${encodeURIComponent(mesDesde)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            const txt = await res.text();
+            configError.textContent = txt || `Error ${res.status}`;
+            return;
+        }
+        configModal.classList.remove('active');
+        await loadConfigs();
+        if (!document.getElementById('view-dashboard').classList.contains('hidden')) {
+            loadBudget();
+        }
+    } catch (err) {
+        console.error('Error guardando config:', err);
+        configError.textContent = String(err);
+    }
+};
+
+const deleteConfig = async (mes) => {
+    if (!confirm(`Eliminar config para ${mes}? Los meses que la heredaban pasarán a heredar de una anterior.`)) return;
+    const res = await fetch(`/api/configs/${encodeURIComponent(mes)}`, { method: 'DELETE' });
+    if (!res.ok) {
+        const txt = await res.text();
+        alert(txt || `Error ${res.status}`);
+        return;
+    }
+    await loadConfigs();
+    if (!document.getElementById('view-dashboard').classList.contains('hidden')) {
+        loadBudget();
+    }
+};
+
+document.getElementById('btn-nueva-config').onclick = () => openConfigModal(null);
+
+// ======== Navegación de tabs ========
+
+const switchView = (view) => {
+    document.querySelectorAll('.nav-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.view === view);
+    });
+    document.getElementById('view-dashboard').classList.toggle('hidden', view !== 'dashboard');
+    document.getElementById('view-configs').classList.toggle('hidden', view !== 'configs');
+    document.getElementById('period-selector').classList.toggle('hidden', view !== 'dashboard');
+
+    if (view === 'configs') loadConfigs();
+};
+
+document.querySelectorAll('.nav-tab').forEach(t => {
+    t.onclick = () => switchView(t.dataset.view);
+});
+
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
     const selector = document.getElementById('period-selector');
@@ -182,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, '0');
         selector.value = `${year}-${month}`;
-        
+
         selector.addEventListener('change', () => {
             loadBudget();
         });
@@ -192,4 +331,3 @@ document.addEventListener('DOMContentLoaded', () => {
     loadProjections();
     loadMovements();
 });
-

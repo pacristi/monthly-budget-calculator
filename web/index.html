@@ -8,15 +8,19 @@
 </head>
 <body>
     <header class="header">
-        <div class="container" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="container header-row">
             <h1>Budget Dashboard</h1>
-            <div>
-                <input type="month" id="period-selector" class="form-control" style="padding: 0.5rem; border-radius: 4px; border: 1px solid #ccc;">
+            <nav class="nav-tabs">
+                <button class="nav-tab active" data-view="dashboard">Dashboard</button>
+                <button class="nav-tab" data-view="configs">Configuración</button>
+            </nav>
+            <div class="header-actions">
+                <input type="month" id="period-selector" class="form-control">
             </div>
         </div>
     </header>
 
-    <main class="container">
+    <main class="container view" id="view-dashboard">
         <!-- Resumen -->
         <section class="summary-cards" id="summary-section">
             <div class="card">
@@ -34,6 +38,21 @@
             <div class="card highlight">
                 <h3>Disponible Restante</h3>
                 <p class="value" id="val-disponible">--</p>
+            </div>
+        </section>
+
+        <!-- Config del Mes -->
+        <section class="config-widget" id="config-widget">
+            <div class="config-widget-header">
+                <span class="config-widget-title">Config del mes</span>
+                <span class="config-widget-source" id="config-source">--</span>
+            </div>
+            <div class="config-widget-values">
+                <span><strong id="config-pct">--</strong> gasto disponible</span>
+                <span>·</span>
+                <span>Día de corte crédito: <strong id="config-corte">--</strong></span>
+                <span>·</span>
+                <span>USD/CLP: <strong id="config-usd">--</strong></span>
             </div>
         </section>
 
@@ -59,7 +78,6 @@
         </section>
 
         <div class="grid">
-            <!-- Gastos Imputados -->
             <section class="panel">
                 <div class="panel-header">
                     <h2>Gastos en el Mes</h2>
@@ -81,7 +99,6 @@
                 </div>
             </section>
 
-            <!-- Cartola (Movimientos) -->
             <section class="panel">
                 <div class="panel-header">
                     <h2>Movimientos Bancarios</h2>
@@ -105,6 +122,35 @@
         </div>
     </main>
 
+    <main class="container view hidden" id="view-configs">
+        <section class="panel">
+            <div class="panel-header configs-header">
+                <h2>Configuración por mes</h2>
+                <button class="btn btn-primary" id="btn-nueva-config">+ Nueva config</button>
+            </div>
+            <div class="panel-body">
+                <p class="configs-help">
+                    Cada config aplica <strong>desde su mes en adelante</strong>, hasta la próxima config explícita.
+                    Si un mes no tiene config propia, hereda de la anterior.
+                </p>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Mes desde</th>
+                            <th>% Gasto</th>
+                            <th>Día corte crédito</th>
+                            <th>Tasa USD/CLP</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="configs-tbody">
+                        <tr><td colspan="5" class="text-center">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
     <!-- Modal para Dividir -->
     <div class="modal" id="divide-modal">
         <div class="modal-content">
@@ -125,6 +171,42 @@
                         <small id="hint-presets" style="display:block; margin-top:0.4rem; color:#666;"></small>
                     </div>
                     <button type="submit" class="btn btn-primary">Guardar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Config Mensual -->
+    <div class="modal" id="config-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="config-modal-title">Nueva config mensual</h3>
+                <button class="close-btn" id="close-config-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-disclaimer">
+                    Esta config aplicará <strong>desde el mes seleccionado en adelante</strong>,
+                    hasta la próxima config explícita.
+                </p>
+                <form id="config-form">
+                    <div class="form-group">
+                        <label for="cfg-mes">Mes desde (YYYY-MM):</label>
+                        <input type="month" id="cfg-mes" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="cfg-pct">% Gasto disponible (0–100):</label>
+                        <input type="number" id="cfg-pct" step="0.1" min="0" max="100" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="cfg-corte">Día de corte crédito (1–31):</label>
+                        <input type="number" id="cfg-corte" step="1" min="1" max="31" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="cfg-usd">Tasa USD/CLP:</label>
+                        <input type="number" id="cfg-usd" step="0.01" min="0.01" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    <span class="config-form-error" id="cfg-error"></span>
                 </form>
             </div>
         </div>
