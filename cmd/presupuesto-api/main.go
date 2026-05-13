@@ -55,6 +55,8 @@ func main() {
 	http.HandleFunc("/api/projections", handleProjections)
 	http.HandleFunc("/api/movements", handleMovements)
 	http.HandleFunc("/api/divisions", handleDivisions)
+	http.HandleFunc("/api/configs", handlerListar(repoConfigs))
+	http.HandleFunc("/api/configs/", handlerSubconfigs(repoConfigs))
 
 	fmt.Printf("Servidor iniciado en http://localhost:%s\n", *port)
 	log.Fatal(http.ListenAndServe(":"+*port, nil))
