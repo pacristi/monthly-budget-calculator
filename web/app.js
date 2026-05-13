@@ -1,3 +1,8 @@
+const formatFecha = (iso) => {
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : iso;
+};
+
 const formatCurrency = (value, isUSD = false) => {
     if (isUSD) {
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
@@ -52,7 +57,7 @@ const loadBudget = async () => {
             gastosOrdenados.forEach(g => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${g.fecha}</td>
+                    <td>${formatFecha(g.fecha)}</td>
                     <td>${g.descripcion}</td>
                     <td>${formatCurrency(g.carga)}</td>
                     <td>${g.cuotas > 1 ? g.cuotas : '1'}</td>
@@ -85,7 +90,7 @@ const loadMovements = async () => {
                     badge = `<span class="badge">mi parte: ${formatCurrency(Math.abs(m.miParte), m.isUsd)}</span>`;
                 }
                 tr.innerHTML = `
-                    <td>${m.fecha}</td>
+                    <td>${formatFecha(m.fecha)}</td>
                     <td>${m.descripcion} ${badge}</td>
                     <td>${formatCurrency(m.monto, m.isUsd)}</td>
                     <td>
