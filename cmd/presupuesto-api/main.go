@@ -184,14 +184,12 @@ func handleProjections(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleMovements(w http.ResponseWriter, r *http.Request) {
-	client := obchile.NewClient(rutaJson)
-	movs, err := client.Fetch()
+	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", repoConfigs)
+	movs, err := adaptador.ObtenerMovimientos()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	overrides, _ := shared.LeerOverrides(rutaDivisiones)
 
 	type MovimientoRes struct {
 		Fecha       string   `json:"fecha"`
@@ -201,38 +199,14 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 		MiParte     *float64 `json:"miParte,omitempty"`
 	}
 
-	var result []MovimientoRes
+	result := make([]MovimientoRes, 0, len(movs))
 	for _, m := range movs {
-		if m.Monto >= 0 {
-			continue
-		}
-
-		fechaT, err := time.Parse("02-01-2006", m.Fecha)
-		if err != nil {
-			continue
-		}
-		fechaISO := fechaT.Format("2006-01-02")
-
-		var miParte *float64
-		for _, o := range overrides {
-			if o.Fecha == fechaISO && o.MontoOriginal == m.Monto {
-				v := o.MiParte
-				miParte = &v
-				break
-			}
-		}
-
-		isUsd := false
-		if float64(int64(m.Monto)) != m.Monto {
-			isUsd = true
-		}
-
 		result = append(result, MovimientoRes{
-			Fecha:       fechaISO,
+			Fecha:       m.Fecha.Format("2006-01-02"),
 			Descripcion: m.Descripcion,
 			Monto:       m.Monto,
-			IsUSD:       isUsd,
-			MiParte:     miParte,
+			IsUSD:       m.IsUSD,
+			MiParte:     m.MiParte,
 		})
 	}
 
