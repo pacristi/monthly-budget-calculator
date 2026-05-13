@@ -1,3 +1,9 @@
+const fechaParaOrdenar = (f) => {
+    if (/^\d{4}-\d{2}-\d{2}/.test(f)) return f;
+    const m = f.match(/^(\d{2})-(\d{2})-(\d{4})/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : f;
+};
+
 const formatCurrency = (value, isUSD = false) => {
     if (isUSD) {
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
@@ -48,7 +54,7 @@ const loadBudget = async () => {
         if (!data.gastos || data.gastos.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center">No hay gastos para este mes.</td></tr>';
         } else {
-            const gastosOrdenados = [...data.gastos].sort((a, b) => b.fecha.localeCompare(a.fecha));
+            const gastosOrdenados = [...data.gastos].sort((a, b) => fechaParaOrdenar(b.fecha).localeCompare(fechaParaOrdenar(a.fecha)));
             gastosOrdenados.forEach(g => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -77,7 +83,7 @@ const loadMovements = async () => {
         if (!data || data.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center">No hay movimientos.</td></tr>';
         } else {
-            const movimientosOrdenados = [...data].sort((a, b) => b.fecha.localeCompare(a.fecha));
+            const movimientosOrdenados = [...data].sort((a, b) => fechaParaOrdenar(b.fecha).localeCompare(fechaParaOrdenar(a.fecha)));
             movimientosOrdenados.forEach(m => {
                 const tr = document.createElement('tr');
                 let badge = '';
