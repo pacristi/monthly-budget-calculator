@@ -6,14 +6,17 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/joho/godotenv"
 	_ "modernc.org/sqlite"
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
+	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
 	obchileingest "github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest/obchile"
-	"github.com/pierocristi/monthly-budget-calculator/internal/config"
+	xlsxpkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest/xlsx"
+	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
 	sqlitepkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/sqlite"
+	"github.com/pierocristi/monthly-budget-calculator/internal/config"
 	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
 )
 
@@ -122,6 +125,8 @@ func runIngestarSubcommand(args []string) {
 	switch args[0] {
 	case "obchile":
 		runIngestarObchile(args[1:])
+	case "xlsx":
+		runIngestarXlsx(args[1:])
 	default:
 		log.Fatalf("Subcomando ingestar desconocido: %s. Usos: obchile", args[0])
 	}
@@ -138,6 +143,72 @@ func runIngestarObchile(args []string) {
 		log.Fatalf("ingesta obchile: %v", err)
 	}
 	fmt.Printf("Ingesta obchile: %d movimientos nuevos\n", n)
+}
+
+func runIngestarXlsx(args []string) {
+	fs := flag.NewFlagSet("ingestar xlsx", flag.ExitOnError)
+	dbPath := fs.String("db", "data/movimientos.db", "Ruta al archivo sqlite")
+	banco := fs.String("banco", "", "Banco (ej: bchile)")
+	tipo := fs.String("tipo", "", "Tipo de cuenta: cta-corriente | tc-nacional | tc-internacional")
+	año := fs.Int("año", 0, "Año de la cartola (obligatorio para cta-corriente)")
+	dir := fs.String("dir", "", "Directorio con los archivos .xls")
+	fs.Parse(args)
+
+	if *banco == "" || *tipo == "" || *dir == "" {
+		log.Fatalf("Uso: presupuesto-cli ingestar xlsx --banco bchile --tipo cta-corriente --año 2025 --dir <ruta>")
+	}
+
+	parser, err := elegirParserXlsx(*banco, *tipo)
+	if err != nil {
+		log.Fatalf("seleccionando parser: %v", err)
+	}
+
+	archivos, err := filepath.Glob(filepath.Join(*dir, "*.xls"))
+	if err != nil {
+		log.Fatalf("listando %s: %v", *dir, err)
+	}
+	if len(archivos) == 0 {
+		log.Fatalf("ningún .xls en %s", *dir)
+	}
+
+	var batch []ingest.MovimientoBruto
+	for _, a := range archivos {
+		movs, err := parser.Parsear(a, *año)
+		if err != nil {
+			log.Fatalf("parseando %s: %v", a, err)
+		}
+		fmt.Printf("  • %s: %d movimientos\n", filepath.Base(a), len(movs))
+		batch = append(batch, movs...)
+	}
+
+	db, err := sql.Open("sqlite", *dbPath)
+	if err != nil {
+		log.Fatalf("abriendo BD: %v", err)
+	}
+	defer db.Close()
+
+	if err := sqlitepkg.Up(db); err != nil {
+		log.Fatalf("migraciones: %v", err)
+	}
+
+	writer := sqlitepkg.NewWriter(db, "xlsx")
+	n, err := writer.InsertarConDedup(batch)
+	if err != nil {
+		log.Fatalf("insert: %v", err)
+	}
+	fmt.Printf("Ingesta xlsx: %d movimientos nuevos\n", n)
+}
+
+func elegirParserXlsx(banco, tipo string) (xlsxpkg.ParserCartolaXLSX, error) {
+	if banco != "bchile" {
+		return nil, fmt.Errorf("banco no soportado: %s (solo 'bchile' por ahora)", banco)
+	}
+	switch tipo {
+	case "cta-corriente":
+		return xlsxpkg.NewBchileCuentaCorriente(), nil
+	default:
+		return nil, fmt.Errorf("tipo no soportado en esta versión: %s (solo 'cta-corriente' por ahora)", tipo)
+	}
 }
 
 func runSqliteSubcommand(args []string) {

@@ -1,0 +1,152 @@
+package xlsx
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/extrame/xls"
+
+	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
+)
+
+// BchileCuentaCorriente parsea cartolas mensuales de cuenta corriente de
+// Banco de Chile. El formato:
+//   - Filas 0-23: encabezado (titular, RUT, saldos, headers de cartola).
+//   - Fila ~24: headers de movimientos.
+//   - Filas siguientes: movimientos con fecha "dd/mm" (sin año), descripción,
+//     canal, cargo (CLP), abono (CLP), saldo.
+//
+// Como las fechas no traen año, requiere el año explícito al parsear.
+type BchileCuentaCorriente struct{}
+
+func NewBchileCuentaCorriente() *BchileCuentaCorriente {
+	return &BchileCuentaCorriente{}
+}
+
+func (p *BchileCuentaCorriente) Banco() string  { return "bchile" }
+func (p *BchileCuentaCorriente) Source() string { return "cta_corriente" }
+
+// Parsear lee el archivo .xls en `path` y devuelve los movimientos.
+func (p *BchileCuentaCorriente) Parsear(path string, año int) ([]ingest.MovimientoBruto, error) {
+	filas, err := leerFilasCC(path)
+	if err != nil {
+		return nil, fmt.Errorf("leyendo %s: %w", path, err)
+	}
+	return filasAMovimientos(filas, año)
+}
+
+// filaCC representa una fila cruda de la cartola, ya con cargos y abonos
+// parseados a float64 (y a 0 si la celda está vacía).
+type filaCC struct {
+	fecha       string
+	descripcion string
+	canal       string
+	cargo       float64
+	abono       float64
+	saldo       float64
+}
+
+// leerFilasCC abre el .xls y extrae las filas relevantes (descartando
+// el encabezado y la fila de headers).
+func leerFilasCC(path string) ([]filaCC, error) {
+	wb, err := xls.Open(path, "utf-8")
+	if err != nil {
+		return nil, err
+	}
+	sheet := wb.GetSheet(0)
+	if sheet == nil {
+		return nil, fmt.Errorf("sin hoja 0")
+	}
+
+	var out []filaCC
+	headerFound := false
+	for r := 0; r <= int(sheet.MaxRow); r++ {
+		row := sheet.Row(r)
+		if row == nil {
+			continue
+		}
+		col0 := strings.TrimSpace(row.Col(0))
+		if !headerFound {
+			if col0 == "Fecha" {
+				headerFound = true
+			}
+			continue
+		}
+		// Después del header, parseamos filas.
+		f := filaCC{
+			fecha:       strings.TrimSpace(row.Col(0)),
+			descripcion: strings.TrimSpace(row.Col(1)),
+			canal:       strings.TrimSpace(row.Col(2)),
+			cargo:       parseFloat(row.Col(3)),
+			abono:       parseFloat(row.Col(4)),
+			saldo:       parseFloat(row.Col(5)),
+		}
+		out = append(out, f)
+	}
+	return out, nil
+}
+
+func parseFloat(s string) float64 {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	// extrame/xls devuelve números como string con punto decimal en celdas tipo number.
+	var v float64
+	_, err := fmt.Sscanf(s, "%f", &v)
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
+// filasAMovimientos es la capa pura: convierte filas crudas a MovimientoBruto
+// aplicando filtros (SALDO INICIAL, filas vacías, fechas inválidas) y la
+// regla de signo (cargo negativo, abono positivo).
+func filasAMovimientos(filas []filaCC, año int) ([]ingest.MovimientoBruto, error) {
+	var out []ingest.MovimientoBruto
+
+	for _, f := range filas {
+		if esFilaVacia(f) {
+			continue
+		}
+		if strings.EqualFold(f.descripcion, "SALDO INICIAL") {
+			continue
+		}
+
+		fecha, err := time.Parse("02/01/2006", fmt.Sprintf("%s/%d", f.fecha, año))
+		if err != nil {
+			// Fechas no parseables (ej: filas-resumen) se ignoran silenciosamente.
+			continue
+		}
+
+		monto := f.abono - f.cargo
+		if monto == 0 {
+			continue
+		}
+
+		out = append(out, ingest.MovimientoBruto{
+			Banco:       "bchile",
+			Source:      "cta_corriente",
+			Fecha:       fecha,
+			Monto:       monto,
+			Descripcion: f.descripcion,
+			IsUSD:       false,
+			Cuotas:      "",
+			Raw: map[string]any{
+				"fecha_xls":   f.fecha,
+				"descripcion": f.descripcion,
+				"canal":       f.canal,
+				"cargo":       f.cargo,
+				"abono":       f.abono,
+				"saldo":       f.saldo,
+			},
+		})
+	}
+	return out, nil
+}
+
+func esFilaVacia(f filaCC) bool {
+	return f.fecha == "" && f.descripcion == "" && f.cargo == 0 && f.abono == 0
+}
