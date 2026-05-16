@@ -36,31 +36,17 @@ func TestTCNacional_FilasAMovimientos_BasicoCargoYAbono(t *testing.T) {
 	}
 }
 
-func TestTCNacional_FiltraCategoriaInformacion(t *testing.T) {
+func TestTCNacional_NoFiltraEnElParser_DejaPasarTodasLasCuotas(t *testing.T) {
+	// El parser NO debe filtrar cuotas. Es responsabilidad del writer del
+	// sqlite agrupar las cuotas repetidas porque solo él ve el batch
+	// completo de todos los meses.
 	filas := []filaTCN{
-		{categoria: "Total Información Compras en Cuotas", fecha: "07/01/2025", descripcion: "SKY AIRLINE TASA INT 0%", cuotas: "00/03", monto: 36124},
-		{categoria: "Total de Pagos, Compras, Cuotas y Avances", fecha: "07/01/2025", descripcion: "SKY AIRLINE", cuotas: "01/03", monto: 12041},
+		{categoria: "Total Información Compras en Cuotas", fecha: "07/01/2025", descripcion: "SKY", cuotas: "00/03", monto: 36124},
+		{categoria: "Total de Pagos, Compras, Cuotas y Avances", fecha: "07/01/2025", descripcion: "SKY", cuotas: "01/03", monto: 36124},
 	}
 	movs, _ := filasTCNAMovimientos(filas)
-	if len(movs) != 1 {
-		t.Fatalf("esperaba 1 (info filtrada), obtuve %d", len(movs))
-	}
-	if movs[0].Cuotas != "01/03" {
-		t.Errorf("se debió quedar la cuota 01/03, quedó %q", movs[0].Cuotas)
-	}
-}
-
-func TestTCNacional_FiltraCuota00(t *testing.T) {
-	filas := []filaTCN{
-		{categoria: "Total de Pagos, Compras, Cuotas y Avances", fecha: "01/01/2025", descripcion: "Algo 00", cuotas: "00/03", monto: 30000},
-		{categoria: "Total de Pagos, Compras, Cuotas y Avances", fecha: "01/01/2025", descripcion: "Algo real", cuotas: "01/01", monto: 1000},
-	}
-	movs, _ := filasTCNAMovimientos(filas)
-	if len(movs) != 1 {
-		t.Fatalf("esperaba 1 (cuota 00/N filtrada), obtuve %d", len(movs))
-	}
-	if movs[0].Descripcion != "Algo real" {
-		t.Errorf("quedó la fila equivocada: %q", movs[0].Descripcion)
+	if len(movs) != 2 {
+		t.Fatalf("esperaba 2 (sin filtro a nivel parser), obtuve %d", len(movs))
 	}
 }
 
