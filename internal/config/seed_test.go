@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func TestEnsureSeed_RepoVacioSeSeedea(t *testing.T) {
+func TestEnsureSeed_RepoVacioSeSeedeaConHistoria(t *testing.T) {
 	r := NewRepoJSON(filepath.Join(t.TempDir(), "configs.json"))
 
 	seed := SeedPorDefecto(time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC))
@@ -15,8 +15,14 @@ func TestEnsureSeed_RepoVacioSeSeedea(t *testing.T) {
 	}
 
 	configs, _ := r.Listar()
-	if len(configs) != 1 || configs[0].MesDesde != "2026-05" {
-		t.Errorf("seed esperado, got %+v", configs)
+	if len(configs) != 1 {
+		t.Fatalf("esperaba 1 config, obtuve %d", len(configs))
+	}
+	// Debe arrancar lo suficientemente atrás para cubrir movimientos
+	// históricos del scraper / xlsx. El año/mes exacto es decisión del
+	// proyecto: validamos que sea anterior al mes actual.
+	if configs[0].MesDesde >= "2026-05" {
+		t.Errorf("seed debería arrancar antes del mes actual; mesDesde=%s", configs[0].MesDesde)
 	}
 }
 
