@@ -74,7 +74,7 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 		}
 
 		// 3. Aplicar override (en cruda) y luego normalizar a CLP con tasa del mes
-		montoCrudo := shared.AplicarOverrides(mov.Monto, fechaTransaccion.Format("2006-01-02"), a.overrides)
+		montoCrudo := shared.AplicarOverrides(mov.Monto, fechaTransaccion.Format("2006-01-02"), mov.Descripcion, a.overrides)
 		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, cfg.TasaCambioUSD))
 
 		// 4. Determinar política de corte (día de corte del mes del movimiento)
@@ -186,7 +186,10 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 
 		var miParte *float64
 		for _, o := range a.overrides {
-			if o.Fecha == fechaISO && o.MontoOriginal == m.Monto {
+			if o.Descripcion == "" {
+				continue
+			}
+			if o.Fecha == fechaISO && o.MontoOriginal == m.Monto && o.Descripcion == m.Descripcion {
 				v := o.MiParte
 				miParte = &v
 				break
