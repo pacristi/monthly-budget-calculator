@@ -18,19 +18,25 @@ import (
 // overrides que el adapter legacy obchile, pero contra la BD en lugar
 // de un JSON puntual.
 type Adapter struct {
-	db           *sql.DB
-	overrides    []shared.Override
-	rutaManuales string
-	resolvedor   presupuesto.ResolvedorConfig
+	db              *sql.DB
+	overrides       []shared.Override
+	exclusiones     []string
+	patronesSueldo  []string
+	rutaManuales    string
+	resolvedor      presupuesto.ResolvedorConfig
 }
 
-func NewAdapter(db *sql.DB, rutaDivisiones, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
+func NewAdapter(db *sql.DB, rutaDivisiones, rutaExclusiones, rutaSueldo, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
 	overrides, _ := shared.LeerOverrides(rutaDivisiones)
+	exclusiones, _ := shared.LeerExclusiones(rutaExclusiones)
+	patronesSueldo, _ := shared.LeerPatronesSueldo(rutaSueldo)
 	return &Adapter{
-		db:           db,
-		overrides:    overrides,
-		rutaManuales: rutaManuales,
-		resolvedor:   resolvedor,
+		db:             db,
+		overrides:      overrides,
+		exclusiones:    exclusiones,
+		patronesSueldo: patronesSueldo,
+		rutaManuales:   rutaManuales,
+		resolvedor:     resolvedor,
 	}
 }
 
@@ -58,24 +64,37 @@ func (a *Adapter) ObtenerSueldoBase(periodo presupuesto.PeriodoPresupuestario) (
 		periodo.Inicio.Format("2006-01-02"), periodo.Fin.Format("2006-01-02"))
 }
 
-// buscarSueldoEnRango busca el último movimiento con descripción de sueldo
-// dentro del rango [ini, fin]. Retorna (monto, true, nil) si encuentra,
-// (0, false, nil) si no hay match, (0, false, err) si el query falla.
+// buscarSueldoEnRango busca el último movimiento positivo dentro del rango
+// [ini, fin] cuya descripción matchea alguno de los patrones de sueldo.
+// Si la lista de patrones está vacía, retorna (0, false, nil) — el llamador
+// reportará que no hay sueldo, en lugar de fallar de forma confusa.
+//
+// El match se hace en Go porque sqlite UPPER/LOWER no maneja unicode bien;
+// además permite múltiples patrones sin armar SQL dinámico.
 func (a *Adapter) buscarSueldoEnRango(ini, fin time.Time) (float64, bool, error) {
-	row := a.db.QueryRow(`SELECT monto FROM movimientos
-		WHERE fecha BETWEEN ? AND ?
-		  AND (LOWER(descripcion) LIKE '%pago de sueldos%' OR LOWER(descripcion) LIKE '%pago:de sueldos%')
-		ORDER BY fecha DESC LIMIT 1`,
+	if len(a.patronesSueldo) == 0 {
+		return 0, false, nil
+	}
+	rows, err := a.db.Query(`SELECT fecha, monto, descripcion FROM movimientos
+		WHERE fecha BETWEEN ? AND ? AND monto > 0
+		ORDER BY fecha DESC`,
 		ini.Format("2006-01-02"), fin.Format("2006-01-02"),
 	)
-	var monto float64
-	if err := row.Scan(&monto); err != nil {
-		if err == sql.ErrNoRows {
-			return 0, false, nil
-		}
+	if err != nil {
 		return 0, false, err
 	}
-	return math.Abs(monto), true, nil
+	defer rows.Close()
+	for rows.Next() {
+		var fecha, descripcion string
+		var monto float64
+		if err := rows.Scan(&fecha, &monto, &descripcion); err != nil {
+			return 0, false, err
+		}
+		if shared.CoincidePatronSueldo(descripcion, a.patronesSueldo) {
+			return math.Abs(monto), true, nil
+		}
+	}
+	return 0, false, rows.Err()
 }
 
 // ObtenerGastosValidos lee TODOS los movimientos con monto < 0 (cargos),
@@ -99,7 +118,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 		if err := rows.Scan(&id, &fechaISO, &monto, &descripcion, &source, &isUSDInt, &cuotasStr); err != nil {
 			return nil, err
 		}
-		if shared.EsGastoIgnorable(descripcion) {
+		if shared.EsGastoIgnorable(descripcion, a.exclusiones) {
 			continue
 		}
 		fechaTransaccion, err := time.Parse("2006-01-02", fechaISO)

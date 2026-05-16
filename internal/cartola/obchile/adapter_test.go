@@ -63,7 +63,7 @@ func TestObtenerGastosValidos_ConGastosManuales(t *testing.T) {
 		t.Fatalf("No se pudo crear json de manuales: %v", err)
 	}
 
-	adapter := NewAdapter(scraperJsonPath, "", manualesJsonPath, nuevoResolvedorFake(900.0, 25))
+	adapter := NewAdapter(scraperJsonPath, "", "", "", manualesJsonPath, nuevoResolvedorFake(900.0, 25))
 
 	periodo := presupuesto.PeriodoPresupuestario{
 		Inicio: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
@@ -94,7 +94,7 @@ func TestObtenerGastosValidos_ConGastosManuales(t *testing.T) {
 }
 
 func TestLeerGastosManuales_ArchivoNoExiste(t *testing.T) {
-	adapter := NewAdapter("scraper_dummy.json", "", "ruta_inexistente.json", nuevoResolvedorFake(900.0, 25))
+	adapter := NewAdapter("scraper_dummy.json", "", "", "", "ruta_inexistente.json", nuevoResolvedorFake(900.0, 25))
 
 	gastosManuales, err := adapter.leerGastosManuales()
 	if err != nil {

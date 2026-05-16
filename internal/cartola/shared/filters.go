@@ -1,28 +1,69 @@
 package shared
 
 import (
+	"encoding/json"
+	"os"
 	"strconv"
 	"strings"
 )
 
-// EsGastoIgnorable aplica las reglas de SRE para no ensuciar el presupuesto con movimientos patrimoniales.
-func EsGastoIgnorable(descripcion string) bool {
+// EsGastoIgnorable devuelve true si la descripción contiene alguna de las
+// substrings de `exclusiones` (case-insensitive). Las exclusiones son
+// personales: típicamente ahorros, traspasos patrimoniales y pagos de
+// tarjeta que ya están contabilizados en otra parte.
+func EsGastoIgnorable(descripcion string, exclusiones []string) bool {
 	desc := strings.ToLower(descripcion)
-
-	// Reglas de exclusión:
-	exclusiones := []string{
-		"cargo por pago tc",
-		"pago tarjeta de credito",
-		"fintual",
-		"racional",
-	}
-
 	for _, e := range exclusiones {
-		if strings.Contains(desc, e) {
+		if strings.Contains(desc, strings.ToLower(e)) {
 			return true
 		}
 	}
+	return false
+}
 
+// LeerExclusiones lee un JSON con la lista de substrings a ignorar al
+// calcular gastos. El formato es `["fintual", "ahorro x", ...]`.
+// Tolera que el archivo no exista (retorna lista vacía).
+func LeerExclusiones(ruta string) ([]string, error) {
+	return leerListaStrings(ruta)
+}
+
+// LeerPatronesSueldo lee un JSON con la lista de substrings que
+// identifican un depósito de sueldo en la descripción de un movimiento.
+// El formato es `["pago de sueldos", "pago:de sueldos", ...]`.
+// Tolera archivo inexistente (retorna lista vacía).
+func LeerPatronesSueldo(ruta string) ([]string, error) {
+	return leerListaStrings(ruta)
+}
+
+func leerListaStrings(ruta string) ([]string, error) {
+	if ruta == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(ruta)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []string
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CoincidePatronSueldo retorna true si descripcion (case-insensitive)
+// contiene alguno de los patrones. Igual semántica que EsGastoIgnorable
+// pero conceptualmente distinto (identificación vs filtrado).
+func CoincidePatronSueldo(descripcion string, patrones []string) bool {
+	desc := strings.ToLower(descripcion)
+	for _, p := range patrones {
+		if strings.Contains(desc, strings.ToLower(p)) {
+			return true
+		}
+	}
 	return false
 }
 

@@ -21,13 +21,15 @@ import (
 )
 
 var (
-	rutaJson       string
-	rutaDivisiones string
-	repoConfigs    *config.RepoJSON
-	proveedor      string
-	dbPath         string
-	rutaManuales   string
-	db             *sql.DB
+	rutaJson        string
+	rutaDivisiones  string
+	rutaExclusiones string
+	rutaSueldo      string
+	repoConfigs     *config.RepoJSON
+	proveedor       string
+	dbPath          string
+	rutaManuales    string
+	db              *sql.DB
 )
 
 func main() {
@@ -38,11 +40,15 @@ func main() {
 	proveedorFlag := flag.String("proveedor", "obchile", "Fuente: obchile (JSON del scraper, default) | sqlite")
 	dbPathFlag := flag.String("db", "data/movimientos.db", "Ruta al sqlite (solo si --proveedor=sqlite)")
 	divisionesFlag := flag.String("divisiones", "", "Ruta al JSON de divisiones")
+	exclusionesFlag := flag.String("exclusiones", "data/exclusiones.json", "Ruta al JSON con substrings de descripciones a ignorar")
+	sueldoFlag := flag.String("sueldo", "data/sueldo.json", "Ruta al JSON con patrones de descripción que identifican el sueldo")
 	manualesFlag := flag.String("manuales", "data/manuales.json", "Ruta al JSON de gastos manuales")
 	flag.Parse()
 
 	proveedor = *proveedorFlag
 	dbPath = *dbPathFlag
+	rutaExclusiones = *exclusionesFlag
+	rutaSueldo = *sueldoFlag
 	rutaManuales = *manualesFlag
 
 	repoConfigs = config.NewRepoJSON(*rutaConfigsFlag)
@@ -93,9 +99,9 @@ func main() {
 
 func nuevoAdaptador() presupuesto.ProveedorFinanciero {
 	if proveedor == "sqlite" {
-		return sqlitepkg.NewAdapter(db, rutaDivisiones, rutaManuales, repoConfigs)
+		return sqlitepkg.NewAdapter(db, rutaDivisiones, rutaExclusiones, rutaSueldo, rutaManuales, repoConfigs)
 	}
-	return obchile.NewAdapter(rutaJson, rutaDivisiones, rutaManuales, repoConfigs)
+	return obchile.NewAdapter(rutaJson, rutaDivisiones, rutaExclusiones, rutaSueldo, rutaManuales, repoConfigs)
 }
 
 func handleBudget(w http.ResponseWriter, r *http.Request) {
