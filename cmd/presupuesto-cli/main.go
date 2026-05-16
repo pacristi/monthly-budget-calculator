@@ -208,8 +208,10 @@ func elegirParserXlsx(banco, tipo string) (xlsxpkg.ParserCartolaXLSX, error) {
 		return xlsxpkg.NewBchileCuentaCorriente(), nil
 	case "tc-nacional":
 		return xlsxpkg.NewBchileTCNacional(), nil
+	case "tc-internacional":
+		return xlsxpkg.NewBchileTCInternacional(), nil
 	default:
-		return nil, fmt.Errorf("tipo no soportado en esta versión: %s (soporta cta-corriente, tc-nacional)", tipo)
+		return nil, fmt.Errorf("tipo no soportado en esta versión: %s (soporta cta-corriente, tc-nacional, tc-internacional)", tipo)
 	}
 }
 
