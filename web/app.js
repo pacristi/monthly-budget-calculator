@@ -344,8 +344,137 @@ const switchView = (view) => {
     document.getElementById('view-configs').classList.toggle('hidden', view !== 'configs');
     document.getElementById('period-selector').classList.toggle('hidden', view !== 'dashboard');
 
-    if (view === 'configs') loadConfigs();
+    if (view === 'configs') {
+        loadConfigs();
+        loadListaStrings('sueldo');
+        loadListaStrings('exclusiones');
+    }
 };
+
+// ======== Listas editables (exclusiones, patrones de sueldo) ========
+
+// Config per-key: endpoint, contenedor UL en HTML, input nuevo, botón agregar
+// y un mensaje vacío.
+const listaStringsConfig = {
+    sueldo: {
+        endpoint: '/api/sueldo',
+        ulId: 'lista-sueldo',
+        inputId: 'input-nuevo-sueldo',
+        btnId: 'btn-agregar-sueldo',
+        empty: 'Sin patrones cargados. Sin esto el sistema no detecta tu sueldo.',
+    },
+    exclusiones: {
+        endpoint: '/api/exclusiones',
+        ulId: 'lista-exclusiones',
+        inputId: 'input-nueva-exclusion',
+        btnId: 'btn-agregar-exclusion',
+        empty: 'Sin exclusiones. Todos los movimientos cuentan como gasto.',
+    },
+};
+
+const renderListaStrings = (key, items) => {
+    const cfg = listaStringsConfig[key];
+    const ul = document.getElementById(cfg.ulId);
+    ul.innerHTML = '';
+    if (!items || items.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'lista-strings-empty';
+        li.textContent = cfg.empty;
+        ul.appendChild(li);
+        return;
+    }
+    items.forEach((s, idx) => {
+        const li = document.createElement('li');
+        const span = document.createElement('span');
+        span.textContent = s;
+        li.appendChild(span);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = '×';
+        btn.title = 'Quitar';
+        btn.onclick = () => removerDeListaStrings(key, idx);
+        li.appendChild(btn);
+        ul.appendChild(li);
+    });
+};
+
+const loadListaStrings = async (key) => {
+    const cfg = listaStringsConfig[key];
+    try {
+        const res = await fetch(cfg.endpoint);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const items = await res.json();
+        renderListaStrings(key, items);
+    } catch (e) {
+        console.error(`Error cargando ${key}:`, e);
+        document.getElementById(cfg.ulId).innerHTML =
+            `<li class="lista-strings-empty" style="color:var(--danger)">Error cargando: ${e.message}</li>`;
+    }
+};
+
+const guardarListaStrings = async (key, items) => {
+    const cfg = listaStringsConfig[key];
+    const res = await fetch(cfg.endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(items),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+};
+
+const agregarAListaStrings = async (key) => {
+    const cfg = listaStringsConfig[key];
+    const input = document.getElementById(cfg.inputId);
+    const valor = input.value.trim();
+    if (valor === '') return;
+
+    try {
+        const actuales = await (await fetch(cfg.endpoint)).json();
+        if (actuales.includes(valor)) {
+            alert('Esa entrada ya existe.');
+            return;
+        }
+        const nuevos = [...actuales, valor];
+        await guardarListaStrings(key, nuevos);
+        input.value = '';
+        renderListaStrings(key, nuevos);
+        // Recargar budget para reflejar el cambio inmediato
+        loadBudget();
+        loadMovements();
+    } catch (e) {
+        console.error(`Error agregando a ${key}:`, e);
+        alert(`Error al agregar: ${e.message}`);
+    }
+};
+
+const removerDeListaStrings = async (key, idx) => {
+    const cfg = listaStringsConfig[key];
+    try {
+        const actuales = await (await fetch(cfg.endpoint)).json();
+        if (idx < 0 || idx >= actuales.length) return;
+        if (!confirm(`¿Quitar "${actuales[idx]}"?`)) return;
+        const nuevos = actuales.filter((_, i) => i !== idx);
+        await guardarListaStrings(key, nuevos);
+        renderListaStrings(key, nuevos);
+        loadBudget();
+        loadMovements();
+    } catch (e) {
+        console.error(`Error removiendo de ${key}:`, e);
+        alert(`Error al quitar: ${e.message}`);
+    }
+};
+
+// Wire-up: botones "agregar" + enter en el input
+['sueldo', 'exclusiones'].forEach(key => {
+    const cfg = listaStringsConfig[key];
+    document.getElementById(cfg.btnId).onclick = () => agregarAListaStrings(key);
+    document.getElementById(cfg.inputId).addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            agregarAListaStrings(key);
+        }
+    });
+});
 
 document.querySelectorAll('.nav-tab').forEach(t => {
     t.onclick = () => switchView(t.dataset.view);
