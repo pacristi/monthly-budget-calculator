@@ -82,13 +82,12 @@ func filasTCNAMovimientos(filas []filaTCN) ([]ingest.MovimientoBruto, error) {
 		if esFilaTCNVacia(f) {
 			continue
 		}
-		// Filtros de informativos.
-		if strings.Contains(strings.ToLower(f.categoria), "información") {
-			continue
-		}
-		if strings.HasPrefix(f.cuotas, "00/") {
-			continue
-		}
+		// NOTA: el banco repite la misma compra en cuotas cada mes con
+		// cuota "M/N" (mismo monto total y fecha de origen). NO filtramos
+		// aquí porque a veces la fila informativa "00/N" no se emite (por
+		// ejemplo cuando la compra y su primera facturación caen en el mismo
+		// mes). La deduplicación de compras en cuotas la maneja el writer
+		// del sqlite, que ve el batch completo de todos los archivos.
 
 		fecha, err := time.Parse("02/01/2006", f.fecha)
 		if err != nil {

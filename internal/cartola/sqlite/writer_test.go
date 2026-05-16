@@ -27,6 +27,13 @@ func mov(fechaISO string, monto float64, desc string) ingest.MovimientoBruto {
 	}
 }
 
+func movCuotas(fechaISO string, monto float64, desc, cuotas string) ingest.MovimientoBruto {
+	m := mov(fechaISO, monto, desc)
+	m.Source = "tc_nacional"
+	m.Cuotas = cuotas
+	return m
+}
+
 func TestInsertarConDedup_InsertSimple(t *testing.T) {
 	w := setupDB(t)
 
@@ -115,5 +122,74 @@ func TestInsertarConDedup_DeltaParcial(t *testing.T) {
 	}
 	if total != 2 {
 		t.Errorf("total en BD debería ser 2, es %d", total)
+	}
+}
+
+func TestInsertarConDedup_CompraEnCuotas_SoloSeImportaUnaVez(t *testing.T) {
+	w := setupDB(t)
+
+	// Misma compra SKY AIRLINE en 3 cuotas: aparece como 00/03 en la cartola
+	// de enero y como 01/03, 02/03, 03/03 en febrero/marzo/abril, todas con
+	// el mismo monto total y misma fecha de compra.
+	batch := []ingest.MovimientoBruto{
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "00/03"),
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "01/03"),
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "02/03"),
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "03/03"),
+	}
+	n, err := w.InsertarConDedup(batch)
+	if err != nil {
+		t.Fatalf("InsertarConDedup: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("esperaba 1 inserción (compra única), obtuve %d", n)
+	}
+
+	// El representante elegido debería ser el "00/03" (compra original).
+	var cuotas string
+	w.db.QueryRow(`SELECT cuotas FROM movimientos WHERE descripcion = 'SKY AIRLINE'`).Scan(&cuotas)
+	if cuotas != "00/03" {
+		t.Errorf("representante: esperaba 00/03, obtuve %q", cuotas)
+	}
+}
+
+func TestInsertarConDedup_CompraEnCuotas_SinCero_EligeMenorM(t *testing.T) {
+	w := setupDB(t)
+
+	// El banco a veces NO emite la fila "00/N" (si la compra se factura el
+	// mismo mes que se hizo). En ese caso debe ganar la cuota con menor M.
+	batch := []ingest.MovimientoBruto{
+		movCuotas("2025-02-18", -31313, "BAR ALONSO", "03/03"),
+		movCuotas("2025-02-18", -31313, "BAR ALONSO", "01/03"),
+		movCuotas("2025-02-18", -31313, "BAR ALONSO", "02/03"),
+	}
+	n, err := w.InsertarConDedup(batch)
+	if err != nil {
+		t.Fatalf("InsertarConDedup: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("esperaba 1 inserción, obtuve %d", n)
+	}
+
+	var cuotas string
+	w.db.QueryRow(`SELECT cuotas FROM movimientos WHERE descripcion = 'BAR ALONSO'`).Scan(&cuotas)
+	if cuotas != "01/03" {
+		t.Errorf("sin 00/N debe ganar la M menor (01/03), obtuve %q", cuotas)
+	}
+}
+
+func TestInsertarConDedup_CompraEnCuotas_EsIdempotente(t *testing.T) {
+	w := setupDB(t)
+
+	batch := []ingest.MovimientoBruto{
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "00/03"),
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "01/03"),
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "02/03"),
+	}
+	if n, _ := w.InsertarConDedup(batch); n != 1 {
+		t.Fatalf("primera corrida: esperaba 1, obtuve %d", n)
+	}
+	if n, _ := w.InsertarConDedup(batch); n != 0 {
+		t.Errorf("segunda corrida: esperaba 0, obtuve %d", n)
 	}
 }
