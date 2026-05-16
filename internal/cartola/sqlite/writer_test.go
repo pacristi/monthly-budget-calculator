@@ -125,14 +125,13 @@ func TestInsertarConDedup_DeltaParcial(t *testing.T) {
 	}
 }
 
-func TestInsertarConDedup_CompraEnCuotas_SoloSeImportaUnaVez(t *testing.T) {
+func TestInsertarConDedup_CompraEnCuotas_GuardaMontoTotal(t *testing.T) {
 	w := setupDB(t)
 
-	// Misma compra SKY AIRLINE en 3 cuotas: aparece como 00/03 en la cartola
-	// de enero y como 01/03, 02/03, 03/03 en febrero/marzo/abril, todas con
-	// el mismo monto total y misma fecha de compra.
+	// SKY AIRLINE en 3 cuotas. En el xlsx cada fila tiene el monto de la
+	// CUOTA (no del total). Banco repite la misma fecha de origen en las 3.
+	// Esperamos: 1 fila guardada con monto = 3 × 36124 = 108372.
 	batch := []ingest.MovimientoBruto{
-		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "00/03"),
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "01/03"),
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "02/03"),
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "03/03"),
@@ -142,39 +141,74 @@ func TestInsertarConDedup_CompraEnCuotas_SoloSeImportaUnaVez(t *testing.T) {
 		t.Fatalf("InsertarConDedup: %v", err)
 	}
 	if n != 1 {
-		t.Errorf("esperaba 1 inserción (compra única), obtuve %d", n)
+		t.Errorf("esperaba 1 inserción, obtuve %d", n)
 	}
 
-	// El representante elegido debería ser el "00/03" (compra original).
+	var monto float64
 	var cuotas string
-	w.db.QueryRow(`SELECT cuotas FROM movimientos WHERE descripcion = 'SKY AIRLINE'`).Scan(&cuotas)
+	w.db.QueryRow(`SELECT monto, cuotas FROM movimientos WHERE descripcion = 'SKY AIRLINE'`).
+		Scan(&monto, &cuotas)
+	if monto != -108372 {
+		t.Errorf("monto guardado: esperaba -108372 (total), obtuve %v", monto)
+	}
 	if cuotas != "00/03" {
-		t.Errorf("representante: esperaba 00/03, obtuve %q", cuotas)
+		t.Errorf("cuotas guardadas: esperaba 00/03 (señalando monto total), obtuve %q", cuotas)
 	}
 }
 
-func TestInsertarConDedup_CompraEnCuotas_SinCero_EligeMenorM(t *testing.T) {
+func TestInsertarConDedup_CompraEnCuotas_AjusteRedondeo(t *testing.T) {
 	w := setupDB(t)
 
-	// El banco a veces NO emite la fila "00/N" (si la compra se factura el
-	// mismo mes que se hizo). En ese caso debe ganar la cuota con menor M.
+	// BAR ALONSO con ajuste de redondeo: 31313 + 31313 + 31314 = 93940.
+	// Cuando tenemos las N cuotas, el total es la suma exacta.
 	batch := []ingest.MovimientoBruto{
-		movCuotas("2025-02-18", -31313, "BAR ALONSO", "03/03"),
 		movCuotas("2025-02-18", -31313, "BAR ALONSO", "01/03"),
 		movCuotas("2025-02-18", -31313, "BAR ALONSO", "02/03"),
+		movCuotas("2025-02-18", -31314, "BAR ALONSO", "03/03"),
+	}
+	if _, err := w.InsertarConDedup(batch); err != nil {
+		t.Fatalf("InsertarConDedup: %v", err)
+	}
+
+	var monto float64
+	w.db.QueryRow(`SELECT monto FROM movimientos WHERE descripcion = 'BAR ALONSO'`).Scan(&monto)
+	if monto != -93940 {
+		t.Errorf("monto exacto: esperaba -93940, obtuve %v", monto)
+	}
+}
+
+func TestInsertarConDedup_CompraEnCuotas_SoloPrimeraCuotaEstima(t *testing.T) {
+	w := setupDB(t)
+
+	// Carga parcial: sólo conocemos la cuota 1/12. Estimamos total = cuota×N.
+	batch := []ingest.MovimientoBruto{
+		movCuotas("2025-01-15", -10000, "ALGO", "01/12"),
+	}
+	if _, err := w.InsertarConDedup(batch); err != nil {
+		t.Fatalf("InsertarConDedup: %v", err)
+	}
+
+	var monto float64
+	w.db.QueryRow(`SELECT monto FROM movimientos WHERE descripcion = 'ALGO'`).Scan(&monto)
+	if monto != -120000 {
+		t.Errorf("estimación con 1 cuota: esperaba -120000, obtuve %v", monto)
+	}
+}
+
+func TestInsertarConDedup_CompraEnCuotas_SoloInformativaNoInserta(t *testing.T) {
+	w := setupDB(t)
+
+	// Sólo viene la fila informativa 00/N (la compra aún no se facturó).
+	// No debemos insertar: el motor proyectaría cuotas que no existen.
+	batch := []ingest.MovimientoBruto{
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "00/03"),
 	}
 	n, err := w.InsertarConDedup(batch)
 	if err != nil {
 		t.Fatalf("InsertarConDedup: %v", err)
 	}
-	if n != 1 {
-		t.Errorf("esperaba 1 inserción, obtuve %d", n)
-	}
-
-	var cuotas string
-	w.db.QueryRow(`SELECT cuotas FROM movimientos WHERE descripcion = 'BAR ALONSO'`).Scan(&cuotas)
-	if cuotas != "01/03" {
-		t.Errorf("sin 00/N debe ganar la M menor (01/03), obtuve %q", cuotas)
+	if n != 0 {
+		t.Errorf("esperaba 0 inserciones (sólo informativa), obtuve %d", n)
 	}
 }
 
@@ -182,9 +216,9 @@ func TestInsertarConDedup_CompraEnCuotas_EsIdempotente(t *testing.T) {
 	w := setupDB(t)
 
 	batch := []ingest.MovimientoBruto{
-		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "00/03"),
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "01/03"),
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "02/03"),
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "03/03"),
 	}
 	if n, _ := w.InsertarConDedup(batch); n != 1 {
 		t.Fatalf("primera corrida: esperaba 1, obtuve %d", n)

@@ -110,13 +110,79 @@ func (w *Writer) insertarCompraEnCuotas(batch []ingest.MovimientoBruto, fechaCar
 		if yaExiste {
 			continue
 		}
-		elegida := elegirRepresentanteDeCuotas(group)
-		if err := w.insertOne(elegida, fechaCarga); err != nil {
+		representante, ok := construirRepresentanteCompra(group)
+		if !ok {
+			// Solo había filas "00/N" (informativas, sin facturar). No
+			// insertamos nada todavía; cuando aparezca al menos una cuota
+			// facturada cargaremos la compra.
+			continue
+		}
+		if err := w.insertOne(representante, fechaCarga); err != nil {
 			return total, fmt.Errorf("insert compra en cuotas: %w", err)
 		}
 		total++
 	}
 	return total, nil
+}
+
+// construirRepresentanteCompra arma la fila única que va al sqlite para
+// una compra en cuotas. El monto guardado es el TOTAL de la compra
+// (no la cuota individual), porque el dominio divide MontoImputado entre
+// Cuotas al proyectar al mes.
+//
+// Estrategia:
+//   - Considera sólo las filas con M>=1 (cuotas facturadas). Las "00/N"
+//     son informativas, no se han facturado.
+//   - Si tenemos las N cuotas facturadas → total = suma exacta.
+//   - Si tenemos K<N cuotas → estima total = round(suma/K * N). Se
+//     refinará en cargas posteriores (pero como ya guardamos una fila,
+//     hoy no se actualiza — ver compraEnCuotasYaEnBD).
+//
+// Retorna (representante, true) si pudo construirla, (zero, false) si
+// el grupo no contiene cuotas facturadas.
+func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.MovimientoBruto, bool) {
+	var base ingest.MovimientoBruto
+	baseM := -1
+	var sumCuotas float64
+	cuotasFacturadas := 0
+	var totalCuotas int
+
+	for _, m := range group {
+		mNum, n, ok := parseCuotas(m.Cuotas)
+		if !ok {
+			continue
+		}
+		totalCuotas = n
+		if mNum == 0 {
+			continue // informativa, no factura
+		}
+		sumCuotas += m.Monto
+		cuotasFacturadas++
+		if baseM == -1 || mNum < baseM {
+			baseM = mNum
+			base = m
+		}
+	}
+
+	if cuotasFacturadas == 0 {
+		return ingest.MovimientoBruto{}, false
+	}
+
+	// Calcular el total. Si tenemos todas las cuotas, suma exacta. Si no,
+	// extrapolar.
+	var montoTotal float64
+	if cuotasFacturadas == totalCuotas {
+		montoTotal = sumCuotas
+	} else {
+		promedio := sumCuotas / float64(cuotasFacturadas)
+		montoTotal = promedio * float64(totalCuotas)
+	}
+
+	base.Monto = montoTotal
+	// Marcamos las cuotas como "00/N" para señalar que el monto guardado
+	// es el TOTAL de la compra (convención: M=0 ↔ monto total).
+	base.Cuotas = fmt.Sprintf("00/%02d", totalCuotas)
+	return base, true
 }
 
 func (w *Writer) compraEnCuotasYaEnBD(k cuotaCompraKey) (bool, error) {
@@ -175,29 +241,6 @@ func (w *Writer) insertarSimples(batch []ingest.MovimientoBruto, fechaCarga stri
 func cuotaConTotalMayorAUno(cuotas string) bool {
 	_, n, ok := parseCuotas(cuotas)
 	return ok && n > 1
-}
-
-// elegirRepresentanteDeCuotas escoge la fila más informativa del grupo:
-// si alguna tiene cuota "00/N" (compra original con monto total
-// declarado por el banco), esa. Si no, la de menor M (típicamente
-// "01/N", la primera cuota facturada — sin ajustes de redondeo).
-func elegirRepresentanteDeCuotas(group []ingest.MovimientoBruto) ingest.MovimientoBruto {
-	mejor := group[0]
-	mejorM := -1
-	for _, m := range group {
-		mNum, _, ok := parseCuotas(m.Cuotas)
-		if !ok {
-			continue
-		}
-		if mNum == 0 {
-			return m // "00/N" gana sin discusión
-		}
-		if mejorM == -1 || mNum < mejorM {
-			mejorM = mNum
-			mejor = m
-		}
-	}
-	return mejor
 }
 
 // parseCuotas extrae M y N del formato "M/N". Retorna ok=false si el
