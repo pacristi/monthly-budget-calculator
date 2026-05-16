@@ -34,26 +34,48 @@ func NewAdapter(db *sql.DB, rutaDivisiones, rutaManuales string, resolvedor pres
 	}
 }
 
-// ObtenerSueldoBase busca el primer movimiento dentro del periodo cuya
-// descripción contiene "pago de sueldos" o "pago:de sueldos" y devuelve
-// su monto en valor absoluto.
+// ObtenerSueldoBase busca el sueldo del periodo. Si no aparece (típico
+// los primeros días del mes, antes del pago), cae al sueldo del mes
+// anterior como estimación.
+//
+// Retorna error solo si tampoco hay registro en el mes anterior.
 func (a *Adapter) ObtenerSueldoBase(periodo presupuesto.PeriodoPresupuestario) (float64, error) {
-	fechaIni := periodo.Inicio.Format("2006-01-02")
-	fechaFin := periodo.Fin.Format("2006-01-02")
+	if monto, ok, err := a.buscarSueldoEnRango(periodo.Inicio, periodo.Fin); err != nil {
+		return 0, err
+	} else if ok {
+		return monto, nil
+	}
+
+	iniAnterior := periodo.Inicio.AddDate(0, -1, 0)
+	finAnterior := periodo.Inicio.Add(-time.Nanosecond)
+	if monto, ok, err := a.buscarSueldoEnRango(iniAnterior, finAnterior); err != nil {
+		return 0, err
+	} else if ok {
+		return monto, nil
+	}
+
+	return 0, fmt.Errorf("sueldo no encontrado en periodo %s — %s ni en el mes anterior",
+		periodo.Inicio.Format("2006-01-02"), periodo.Fin.Format("2006-01-02"))
+}
+
+// buscarSueldoEnRango busca el último movimiento con descripción de sueldo
+// dentro del rango [ini, fin]. Retorna (monto, true, nil) si encuentra,
+// (0, false, nil) si no hay match, (0, false, err) si el query falla.
+func (a *Adapter) buscarSueldoEnRango(ini, fin time.Time) (float64, bool, error) {
 	row := a.db.QueryRow(`SELECT monto FROM movimientos
 		WHERE fecha BETWEEN ? AND ?
 		  AND (LOWER(descripcion) LIKE '%pago de sueldos%' OR LOWER(descripcion) LIKE '%pago:de sueldos%')
 		ORDER BY fecha DESC LIMIT 1`,
-		fechaIni, fechaFin,
+		ini.Format("2006-01-02"), fin.Format("2006-01-02"),
 	)
 	var monto float64
 	if err := row.Scan(&monto); err != nil {
 		if err == sql.ErrNoRows {
-			return 0, fmt.Errorf("sueldo no encontrado en periodo %s — %s", fechaIni, fechaFin)
+			return 0, false, nil
 		}
-		return 0, err
+		return 0, false, err
 	}
-	return math.Abs(monto), nil
+	return math.Abs(monto), true, nil
 }
 
 // ObtenerGastosValidos lee TODOS los movimientos con monto < 0 (cargos),

@@ -76,11 +76,26 @@ func TestAdapter_ObtenerSueldoBase_EncuentraSueldoDelPeriodo(t *testing.T) {
 	}
 }
 
-func TestAdapter_ObtenerSueldoBase_NoEncontradoEsError(t *testing.T) {
+func TestAdapter_ObtenerSueldoBase_FallbackAlMesAnterior(t *testing.T) {
+	db := setupAdapterDB(t)
+	// Solo hay sueldo de abril; mayo aún no se pagó.
+	insertarMov(t, db, "2026-04-30", 1400000, "PAGO:DE SUELDOS Abril", "cta_corriente", false, "")
+
+	a := NewAdapter(db, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	sueldo, err := a.ObtenerSueldoBase(periodoMayo2026())
+	if err != nil {
+		t.Fatalf("esperaba fallback al sueldo de abril, obtuve error: %v", err)
+	}
+	if sueldo != 1400000 {
+		t.Errorf("esperaba 1400000 (sueldo de abril como fallback), obtuve %v", sueldo)
+	}
+}
+
+func TestAdapter_ObtenerSueldoBase_NoEncontradoNiEnMesAnteriorEsError(t *testing.T) {
 	db := setupAdapterDB(t)
 	a := NewAdapter(db, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	if _, err := a.ObtenerSueldoBase(periodoMayo2026()); err == nil {
-		t.Error("esperaba error por sueldo no encontrado")
+		t.Error("esperaba error por sueldo no encontrado ni en el mes ni en el anterior")
 	}
 }
 
