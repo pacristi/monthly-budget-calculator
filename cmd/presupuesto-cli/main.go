@@ -1,18 +1,27 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/joho/godotenv"
+	_ "modernc.org/sqlite"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
 	"github.com/pierocristi/monthly-budget-calculator/internal/config"
+	sqlitepkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/sqlite"
 	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
 )
 
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "sqlite" {
+		runSqliteSubcommand(os.Args[2:])
+		return
+	}
+
 	_ = godotenv.Load()
 
 	detalleFlag := flag.Bool("detalle", false, "Mostrar la lista de gastos que impactan este mes")
@@ -98,4 +107,24 @@ func main() {
 		}
 		fmt.Println("=============================")
 	}
+}
+
+func runSqliteSubcommand(args []string) {
+	if len(args) < 1 || args[0] != "init" {
+		log.Fatalf("Uso: presupuesto-cli sqlite init --db <ruta>")
+	}
+	fs := flag.NewFlagSet("sqlite init", flag.ExitOnError)
+	dbPath := fs.String("db", "data/movimientos.db", "Ruta al archivo sqlite")
+	fs.Parse(args[1:])
+
+	db, err := sql.Open("sqlite", *dbPath)
+	if err != nil {
+		log.Fatalf("abriendo BD: %v", err)
+	}
+	defer db.Close()
+
+	if err := sqlitepkg.Up(db); err != nil {
+		log.Fatalf("aplicando migraciones: %v", err)
+	}
+	fmt.Printf("BD inicializada en %s\n", *dbPath)
 }
