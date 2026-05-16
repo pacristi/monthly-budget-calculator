@@ -7,12 +7,14 @@ const currentDir = import.meta.dirname;
 
 const RUT = process.env.BANCO_RUT;
 const PASSWORD = process.env.BANCO_PASS;
+const BANCO_ID = process.env.BANCO_ID || "bchile";
 
 async function run() {
-  console.log("Iniciando ingesta...");
-  // Ojo: asegúrate de poner el banco que tienes, ej: "banco_de_chile" o el ID que use la librería
-  const banco = getBank("bchile"); 
-  
+  console.log(`Iniciando ingesta de banco "${BANCO_ID}"...`);
+  // Bancos soportados: ver https://www.npmjs.com/package/open-banking-chile
+  const banco = getBank(BANCO_ID);
+
+
   const result = await banco.scrape({
     rut: RUT,
     password: PASSWORD,
