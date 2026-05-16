@@ -6,6 +6,21 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Carga .env si existe. Lo hacemos al inicio Y después de crearlo, así
+# `node scraper.js` y `go run` ven BANCO_RUT, BANCO_PASS y BANCO_ID como
+# variables de entorno (igual que cuando se corre por Makefile, que tiene
+# `include .env; export`).
+load_env() {
+  if [ -f .env ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+  fi
+}
+
+load_env
+
 echo "Calculadora de Presupuesto Mensual"
 echo "===================================="
 echo
@@ -25,6 +40,7 @@ BANCO_RUT=$rut
 BANCO_PASS=$pass
 EOF
   echo "OK, .env creado."
+  load_env
 else
   echo ".env ya existe, no lo toco."
 fi
