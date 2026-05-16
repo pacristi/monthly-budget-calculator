@@ -36,28 +36,48 @@ func main() {
 	detalleFlag := flag.Bool("detalle", false, "Mostrar la lista de gastos que impactan este mes")
 	proyectarFlag := flag.Int("proyectar", 0, "Proyectar la carga de gastos para los próximos N meses")
 	rutaConfigsFlag := flag.String("configs", "data/configs-mensuales.json", "Ruta del archivo de configs mensuales")
+	proveedorFlag := flag.String("proveedor", "obchile", "Fuente: obchile (JSON del scraper, default) | sqlite")
+	dbPathFlag := flag.String("db", "data/movimientos.db", "Ruta al sqlite (solo si --proveedor=sqlite)")
+	divisionesFlag := flag.String("divisiones", "", "Ruta al JSON de divisiones (solo si --proveedor=sqlite; en obchile es posicional)")
+	manualesFlag := flag.String("manuales", "data/manuales.json", "Ruta al JSON de gastos manuales")
 	flag.Parse()
 
-	args := flag.Args()
-	if len(args) < 1 {
-		log.Fatalf("Uso: presupuesto-cli [--detalle] [--proyectar N] [--configs <ruta>] <ruta_archivo_json> [ruta_archivo_divisiones]")
-	}
-
-	rutaJson := args[0]
-	rutaDivisiones := ""
-	if len(args) > 1 {
-		rutaDivisiones = args[1]
-	}
-
 	fmt.Printf("Iniciando Calculadora de Presupuesto Mensual\n")
-	fmt.Printf("Leyendo datos de: %s\n", rutaJson)
 
 	repoConfigs := config.NewRepoJSON(*rutaConfigsFlag)
 	if err := config.EnsureSeed(repoConfigs, config.SeedPorDefecto(time.Now())); err != nil {
 		log.Fatalf("inicializando configs: %v", err)
 	}
 
-	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", repoConfigs)
+	var adaptador presupuesto.ProveedorFinanciero
+
+	switch *proveedorFlag {
+	case "obchile":
+		args := flag.Args()
+		if len(args) < 1 {
+			log.Fatalf("Uso: presupuesto-cli [...] --proveedor obchile <ruta_json> [ruta_divisiones]")
+		}
+		rutaJson := args[0]
+		rutaDivisiones := ""
+		if len(args) > 1 {
+			rutaDivisiones = args[1]
+		}
+		fmt.Printf("Leyendo desde JSON: %s\n", rutaJson)
+		adaptador = obchile.NewAdapter(rutaJson, rutaDivisiones, *manualesFlag, repoConfigs)
+	case "sqlite":
+		db, err := sql.Open("sqlite", *dbPathFlag)
+		if err != nil {
+			log.Fatalf("abriendo BD: %v", err)
+		}
+		defer db.Close()
+		if err := sqlitepkg.Up(db); err != nil {
+			log.Fatalf("migraciones: %v", err)
+		}
+		fmt.Printf("Leyendo desde sqlite: %s\n", *dbPathFlag)
+		adaptador = sqlitepkg.NewAdapter(db, *divisionesFlag, *manualesFlag, repoConfigs)
+	default:
+		log.Fatalf("--proveedor inválido: %s (obchile | sqlite)", *proveedorFlag)
+	}
 	calc := presupuesto.NewCalculadora(adaptador, repoConfigs)
 
 	ahora := time.Now()

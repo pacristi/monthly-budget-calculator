@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,16 +12,23 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	_ "modernc.org/sqlite"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/shared"
+	sqlitepkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/sqlite"
 	"github.com/pierocristi/monthly-budget-calculator/internal/config"
 	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
 )
 
 var (
-	rutaJson       string
-	rutaDivisiones string
-	repoConfigs    *config.RepoJSON
+	rutaJson          string
+	rutaDivisiones    string
+	repoConfigs       *config.RepoJSON
+	proveedor         string
+	dbPath            string
+	rutaDivisionesArg string
+	rutaManuales      string
+	db                *sql.DB
 )
 
 func main() {
@@ -28,22 +36,44 @@ func main() {
 
 	port := flag.String("port", "8085", "Puerto para el servidor web")
 	rutaConfigsFlag := flag.String("configs", "data/configs-mensuales.json", "Ruta del archivo de configs mensuales")
+	proveedorFlag := flag.String("proveedor", "obchile", "Fuente: obchile (JSON del scraper, default) | sqlite")
+	dbPathFlag := flag.String("db", "data/movimientos.db", "Ruta al sqlite (solo si --proveedor=sqlite)")
+	divisionesFlag := flag.String("divisiones", "", "Ruta al JSON de divisiones")
+	manualesFlag := flag.String("manuales", "data/manuales.json", "Ruta al JSON de gastos manuales")
 	flag.Parse()
 
-	args := flag.Args()
-	if len(args) < 1 {
-		log.Fatalf("Uso: presupuesto-api [--configs <ruta>] <ruta_archivo_json> [ruta_archivo_divisiones]")
-	}
-
-	rutaJson = args[0]
-	rutaDivisiones = ""
-	if len(args) > 1 {
-		rutaDivisiones = args[1]
-	}
+	proveedor = *proveedorFlag
+	dbPath = *dbPathFlag
+	rutaDivisionesArg = *divisionesFlag
+	rutaManuales = *manualesFlag
 
 	repoConfigs = config.NewRepoJSON(*rutaConfigsFlag)
 	if err := config.EnsureSeed(repoConfigs, config.SeedPorDefecto(time.Now())); err != nil {
 		log.Fatalf("inicializando configs: %v", err)
+	}
+
+	switch proveedor {
+	case "obchile":
+		args := flag.Args()
+		if len(args) < 1 {
+			log.Fatalf("Uso: presupuesto-api [--configs <ruta>] <ruta_archivo_json> [ruta_archivo_divisiones]")
+		}
+		rutaJson = args[0]
+		rutaDivisiones = ""
+		if len(args) > 1 {
+			rutaDivisiones = args[1]
+		}
+	case "sqlite":
+		var err error
+		db, err = sql.Open("sqlite", dbPath)
+		if err != nil {
+			log.Fatalf("abriendo BD: %v", err)
+		}
+		if err := sqlitepkg.Up(db); err != nil {
+			log.Fatalf("migraciones: %v", err)
+		}
+	default:
+		log.Fatalf("--proveedor inválido: %s (obchile | sqlite)", proveedor)
 	}
 
 	// Servir archivos estáticos
@@ -62,8 +92,15 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+*port, nil))
 }
 
+func nuevoAdaptador() presupuesto.ProveedorFinanciero {
+	if proveedor == "sqlite" {
+		return sqlitepkg.NewAdapter(db, rutaDivisionesArg, rutaManuales, repoConfigs)
+	}
+	return obchile.NewAdapter(rutaJson, rutaDivisiones, rutaManuales, repoConfigs)
+}
+
 func handleBudget(w http.ResponseWriter, r *http.Request) {
-	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", repoConfigs)
+	adaptador := nuevoAdaptador()
 	calc := presupuesto.NewCalculadora(adaptador, repoConfigs)
 
 	ahora := time.Now()
@@ -137,7 +174,7 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleProjections(w http.ResponseWriter, r *http.Request) {
-	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", repoConfigs)
+	adaptador := nuevoAdaptador()
 
 	mesesHaciaAdelante := 6
 	if mStr := r.URL.Query().Get("months"); mStr != "" {
@@ -184,7 +221,7 @@ func handleProjections(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleMovements(w http.ResponseWriter, r *http.Request) {
-	adaptador := obchile.NewAdapter(rutaJson, rutaDivisiones, "data/manuales.json", repoConfigs)
+	adaptador := nuevoAdaptador()
 	movs, err := adaptador.ObtenerMovimientos()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
