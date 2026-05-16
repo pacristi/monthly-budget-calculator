@@ -62,25 +62,27 @@ func leerFilasCC(path string) ([]filaCC, error) {
 	var out []filaCC
 	headerFound := false
 	for r := 0; r <= int(sheet.MaxRow); r++ {
-		row := sheet.Row(r)
+		row := safeRow(sheet, r)
 		if row == nil {
 			continue
 		}
-		col0 := strings.TrimSpace(row.Col(0))
+		col1 := strings.TrimSpace(row.Col(1))
 		if !headerFound {
-			if col0 == "Fecha" {
+			if col1 == "Fecha" {
 				headerFound = true
 			}
 			continue
 		}
-		// Después del header, parseamos filas.
+		// Después del header, parseamos filas. Las columnas en extrame/xls
+		// para este formato vienen desplazadas: col 0 está siempre vacía y
+		// los datos viven en cols 1..6.
 		f := filaCC{
-			fecha:       strings.TrimSpace(row.Col(0)),
-			descripcion: strings.TrimSpace(row.Col(1)),
-			canal:       strings.TrimSpace(row.Col(2)),
-			cargo:       parseFloat(row.Col(3)),
-			abono:       parseFloat(row.Col(4)),
-			saldo:       parseFloat(row.Col(5)),
+			fecha:       strings.TrimSpace(row.Col(1)),
+			descripcion: strings.TrimSpace(row.Col(2)),
+			canal:       strings.TrimSpace(row.Col(3)),
+			cargo:       parseFloat(row.Col(4)),
+			abono:       parseFloat(row.Col(5)),
+			saldo:       parseFloat(row.Col(6)),
 		}
 		out = append(out, f)
 	}

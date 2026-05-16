@@ -3,9 +3,12 @@ package xlsx
 import "testing"
 
 func TestTCInternacional_FilasAMovimientos_BasicoCargoYAbono(t *testing.T) {
+	// Convención del banco para TC internacional:
+	// - Compras vienen positivas en el xlsx -> negativas en MovimientoBruto.
+	// - Pagos a la TC vienen negativos en el xlsx -> positivos en MovimientoBruto.
 	filas := []filaTCI{
 		{categoria: "Total  Compras", fecha: "01/08/2025", descripcion: "GOOGLE CLOUD", pais: "ESTADOS UNIDOS", montoOrigen: 0.1, montoUSD: 0.1},
-		{categoria: "Total  Pagos", fecha: "15/08/2025", descripcion: "Pago Dolar TEF", pais: "", montoOrigen: 30.97, montoUSD: 30.97},
+		{categoria: "Total  Pagos", fecha: "15/08/2025", descripcion: "Pago Dolar TEF", pais: "", montoOrigen: -30.97, montoUSD: -30.97},
 	}
 
 	movs, err := filasTCIAMovimientos(filas)

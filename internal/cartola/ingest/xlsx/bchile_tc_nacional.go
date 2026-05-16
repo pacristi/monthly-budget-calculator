@@ -53,7 +53,7 @@ func leerFilasTCN(path string) ([]filaTCN, error) {
 	var out []filaTCN
 	headerFound := false
 	for r := 0; r <= int(sheet.MaxRow); r++ {
-		row := sheet.Row(r)
+		row := safeRow(sheet, r)
 		if row == nil {
 			continue
 		}
