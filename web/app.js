@@ -89,13 +89,18 @@ const loadMovements = async () => {
                 if (m.miParte !== undefined && m.miParte !== null && m.miParte !== m.monto) {
                     badge = `<span class="badge">mi parte: ${formatCurrency(Math.abs(m.miParte), m.isUsd)}</span>`;
                 }
+                const descEsc = m.descripcion.replace(/'/g, "\\'");
+                const miParteArg = m.miParte !== undefined && m.miParte !== null ? m.miParte : 'null';
                 tr.innerHTML = `
                     <td>${formatFecha(m.fecha)}</td>
                     <td>${m.descripcion} ${badge}</td>
                     <td>${formatCurrency(m.monto, m.isUsd)}</td>
                     <td>
-                        <button class="btn btn-primary btn-sm" onclick="openDivideModal('${m.fecha}', '${m.descripcion.replace(/'/g, "\\'")}', ${m.monto}, ${m.isUsd || false}, ${m.miParte !== undefined && m.miParte !== null ? m.miParte : 'null'})">
+                        <button class="btn btn-primary btn-sm" onclick="openDivideModal('${m.fecha}', '${descEsc}', ${m.monto}, ${m.isUsd || false}, ${miParteArg})">
                             Editar mi parte
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="ignorarGasto('${m.fecha}', '${descEsc}', ${m.monto})" title="Marca este gasto como no contable (mi parte = 0)">
+                            No contar
                         </button>
                     </td>
                 `;
@@ -135,6 +140,30 @@ window.openDivideModal = (fecha, descripcion, monto, isUsd = false, miParteActua
     });
 
     modal.classList.add('active');
+};
+
+// ignorarGasto crea un override con miParte=0 para que el gasto no impacte
+// el presupuesto. Es atajo rápido para gastos compartidos donde no me toca
+// nada (alguien más pagó, devolución pendiente, etc.).
+window.ignorarGasto = async (fecha, descripcion, monto) => {
+    if (!confirm(`¿Marcar "${descripcion}" (${formatCurrency(monto, false)}) como no contable?`)) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/divisions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fecha, montoOriginal: monto, descripcion, miParte: 0 })
+        });
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+        }
+        loadBudget();
+        loadMovements();
+    } catch (e) {
+        console.error('Error ignorando gasto:', e);
+        alert('Error al marcar como no contable');
+    }
 };
 
 closeBtn.onclick = () => modal.classList.remove('active');
