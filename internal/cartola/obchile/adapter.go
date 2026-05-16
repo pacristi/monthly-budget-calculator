@@ -17,16 +17,19 @@ import (
 type Adapter struct {
 	client       *Client
 	overrides    []shared.Override
+	exclusiones  []string
 	rutaManuales string
 	resolvedor   presupuesto.ResolvedorConfig
 }
 
-func NewAdapter(rutaJson string, rutaDivisiones string, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
+func NewAdapter(rutaJson string, rutaDivisiones string, rutaExclusiones string, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
 	overrides, _ := shared.LeerOverrides(rutaDivisiones)
+	exclusiones, _ := shared.LeerExclusiones(rutaExclusiones)
 
 	return &Adapter{
 		client:       NewClient(rutaJson),
 		overrides:    overrides,
+		exclusiones:  exclusiones,
 		rutaManuales: rutaManuales,
 		resolvedor:   resolvedor,
 	}
@@ -58,7 +61,7 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 
 	for i, mov := range movimientos {
 		// 1. Filtrar positivos (abonos) y exclusiones
-		if mov.Monto > 0 || shared.EsGastoIgnorable(mov.Descripcion) {
+		if mov.Monto > 0 || shared.EsGastoIgnorable(mov.Descripcion, a.exclusiones) {
 			continue
 		}
 

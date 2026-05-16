@@ -20,15 +20,18 @@ import (
 type Adapter struct {
 	db           *sql.DB
 	overrides    []shared.Override
+	exclusiones  []string
 	rutaManuales string
 	resolvedor   presupuesto.ResolvedorConfig
 }
 
-func NewAdapter(db *sql.DB, rutaDivisiones, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
+func NewAdapter(db *sql.DB, rutaDivisiones, rutaExclusiones, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
 	overrides, _ := shared.LeerOverrides(rutaDivisiones)
+	exclusiones, _ := shared.LeerExclusiones(rutaExclusiones)
 	return &Adapter{
 		db:           db,
 		overrides:    overrides,
+		exclusiones:  exclusiones,
 		rutaManuales: rutaManuales,
 		resolvedor:   resolvedor,
 	}
@@ -99,7 +102,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 		if err := rows.Scan(&id, &fechaISO, &monto, &descripcion, &source, &isUSDInt, &cuotasStr); err != nil {
 			return nil, err
 		}
-		if shared.EsGastoIgnorable(descripcion) {
+		if shared.EsGastoIgnorable(descripcion, a.exclusiones) {
 			continue
 		}
 		fechaTransaccion, err := time.Parse("2006-01-02", fechaISO)

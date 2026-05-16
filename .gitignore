@@ -4,3 +4,6 @@ data/archive/
 ingest/node_modules/
 .env
 bin
+
+# excepciones: ejemplos commiteables como template para usuarios nuevos
+!data/*.example.json
