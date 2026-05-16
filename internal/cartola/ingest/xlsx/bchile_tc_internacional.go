@@ -52,7 +52,7 @@ func leerFilasTCI(path string) ([]filaTCI, error) {
 	var out []filaTCI
 	headerFound := false
 	for r := 0; r <= int(sheet.MaxRow); r++ {
-		row := sheet.Row(r)
+		row := safeRow(sheet, r)
 		if row == nil {
 			continue
 		}
@@ -91,10 +91,11 @@ func filasTCIAMovimientos(filas []filaTCI) ([]ingest.MovimientoBruto, error) {
 			continue
 		}
 
-		monto := f.montoUSD
-		if !esPagoTC(f.descripcion) {
-			monto = -monto
-		}
+		// Convención del banco para TC internacional (distinta a la TC
+		// nacional): las compras vienen positivas y los pagos a la TC
+		// vienen negativos. Negar todo deja cargos como negativos y
+		// abonos como positivos, alineado con la convención del proyecto.
+		monto := -f.montoUSD
 		if monto == 0 {
 			continue
 		}
