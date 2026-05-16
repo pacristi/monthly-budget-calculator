@@ -227,3 +227,82 @@ func TestInsertarConDedup_CompraEnCuotas_EsIdempotente(t *testing.T) {
 		t.Errorf("segunda corrida: esperaba 0, obtuve %d", n)
 	}
 }
+
+func TestInsertarConDedup_DedupCrossSource_TCNacionalVsCreditCard(t *testing.T) {
+	w := setupDB(t)
+
+	// El xlsx mensual entrega tc_nacional; el scraper entrega
+	// credit_card_billed. Misma compra, misma descripción, distinto source:
+	// debe contar como una.
+	f, _ := time.Parse("2006-01-02", "2026-04-15")
+	fromXlsx := ingest.MovimientoBruto{
+		Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -20260,
+		Descripcion: "DL RAPPI CHILE RAPP LAS CONDES", Cuotas: "01/01",
+	}
+	fromScraper := ingest.MovimientoBruto{
+		Banco: "bchile", Source: "credit_card_billed", Fecha: f, Monto: -20260,
+		Descripcion: "DL RAPPI CHILE RAPP LAS CONDES", Cuotas: "",
+	}
+
+	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{fromXlsx}); n != 1 {
+		t.Fatalf("inserta xlsx: esperaba 1, obtuve %d", n)
+	}
+	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{fromScraper}); n != 0 {
+		t.Errorf("scraper repetido: esperaba 0 nuevas, obtuve %d", n)
+	}
+}
+
+func TestInsertarConDedup_DedupCrossSource_CtaCorrienteVsAccountConCasing(t *testing.T) {
+	w := setupDB(t)
+
+	// xlsx en mayúsculas, scraper en Title Case.
+	f, _ := time.Parse("2006-01-02", "2026-04-20")
+	upper := ingest.MovimientoBruto{
+		Banco: "bchile", Source: "cta_corriente", Fecha: f, Monto: -31800,
+		Descripcion: "TRASPASO A:Bruno Cristi",
+	}
+	titleCase := ingest.MovimientoBruto{
+		Banco: "bchile", Source: "account", Fecha: f, Monto: -31800,
+		Descripcion: "Traspaso A:Bruno Cristi",
+	}
+
+	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{upper}); n != 1 {
+		t.Fatalf("inserta xlsx: esperaba 1, obtuve %d", n)
+	}
+	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{titleCase}); n != 0 {
+		t.Errorf("scraper con casing distinto: esperaba 0 nuevas, obtuve %d", n)
+	}
+}
+
+func TestInsertarConDedup_DedupCrossSource_CompraEnCuotas(t *testing.T) {
+	w := setupDB(t)
+
+	// El xlsx trae una compra en cuotas como tc_nacional. El scraper la
+	// puede traer como credit_card_billed (sin cuotas o con formato propio).
+	// Acá modelamos el caso conservador: la fila del scraper viene como
+	// "01/01" pero el monto y la descripción coinciden con UNA de las
+	// cuotas guardadas como compra total — no debería duplicar.
+	f, _ := time.Parse("2006-01-02", "2025-01-07")
+	xlsxCuotas := []ingest.MovimientoBruto{
+		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
+			Descripcion: "SKY AIRLINE", Cuotas: "01/03"},
+		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
+			Descripcion: "SKY AIRLINE", Cuotas: "02/03"},
+		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
+			Descripcion: "SKY AIRLINE", Cuotas: "03/03"},
+	}
+	if n, _ := w.InsertarConDedup(xlsxCuotas); n != 1 {
+		t.Fatalf("inserta cuotas: esperaba 1 (total), obtuve %d", n)
+	}
+
+	// El scraper trae la misma compra como simple con monto total. La
+	// llave (banco, fecha, monto, descripcion_norm) hace match con la
+	// fila guardada (que tiene monto total 108372). No debe duplicar.
+	totalScraper := ingest.MovimientoBruto{
+		Banco: "bchile", Source: "credit_card_billed", Fecha: f, Monto: -108372,
+		Descripcion: "Sky Airline", // distinto casing
+	}
+	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{totalScraper}); n != 0 {
+		t.Errorf("scraper con monto total: esperaba 0 nuevas, obtuve %d", n)
+	}
+}

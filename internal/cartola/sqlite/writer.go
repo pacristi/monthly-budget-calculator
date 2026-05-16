@@ -78,18 +78,20 @@ func separarPorTipoDeCuota(batch []ingest.MovimientoBruto) (enCuotas, simples []
 }
 
 type cuotaCompraKey struct {
-	banco, source, fecha, descripcion string
-	totalCuotas                       int
+	banco, fecha, descripcionNorm string
+	totalCuotas                   int
 }
 
+// cuotaKeyOf agrupa por (banco, fecha, descripcion_normalizada, total_cuotas).
+// No incluye source (mismas razones que keyOf) ni monto (ajustes ±1 peso del
+// banco).
 func cuotaKeyOf(m ingest.MovimientoBruto) cuotaCompraKey {
 	_, n, _ := parseCuotas(m.Cuotas)
 	return cuotaCompraKey{
-		banco:       m.Banco,
-		source:      m.Source,
-		fecha:       m.Fecha.Format("2006-01-02"),
-		descripcion: m.Descripcion,
-		totalCuotas: n,
+		banco:           m.Banco,
+		fecha:           m.Fecha.Format("2006-01-02"),
+		descripcionNorm: descripcionCanonica(m.Descripcion),
+		totalCuotas:     n,
 	}
 }
 
@@ -104,8 +106,8 @@ func (w *Writer) insertarCompraEnCuotas(batch []ingest.MovimientoBruto, fechaCar
 	for k, group := range grupos {
 		yaExiste, err := w.compraEnCuotasYaEnBD(k)
 		if err != nil {
-			return total, fmt.Errorf("chequeando compra en cuotas (%s,%s,%s,%s,N=%d): %w",
-				k.banco, k.source, k.fecha, k.descripcion, k.totalCuotas, err)
+			return total, fmt.Errorf("chequeando compra en cuotas (%s,%s,%s,N=%d): %w",
+				k.banco, k.fecha, k.descripcionNorm, k.totalCuotas, err)
 		}
 		if yaExiste {
 			continue
@@ -186,23 +188,24 @@ func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.Movimi
 }
 
 func (w *Writer) compraEnCuotasYaEnBD(k cuotaCompraKey) (bool, error) {
-	// Una compra en cuotas se identifica por (banco, source, fecha,
-	// descripcion) — el monto puede tener ±1 peso de ajuste, así que
-	// no entra en la llave. Filtramos por N total parseando el campo
-	// cuotas en Go porque el banco usa padding de ceros ("00/03") y
-	// LIKE no se lleva bien con eso.
-	rows, err := w.db.Query(`SELECT cuotas FROM movimientos
-		WHERE banco = ? AND source = ? AND fecha = ? AND descripcion = ?`,
-		k.banco, k.source, k.fecha, k.descripcion,
+	// Llave (banco, fecha, descripcion_normalizada, N_total). Sin source
+	// (xlsx/scraper difieren) ni monto (±1 peso de ajuste). La comparación
+	// de descripción se hace en Go por la limitación unicode de sqlite UPPER.
+	rows, err := w.db.Query(`SELECT descripcion, cuotas FROM movimientos
+		WHERE banco = ? AND fecha = ?`,
+		k.banco, k.fecha,
 	)
 	if err != nil {
 		return false, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var c string
-		if err := rows.Scan(&c); err != nil {
+		var d, c string
+		if err := rows.Scan(&d, &c); err != nil {
 			return false, err
+		}
+		if descripcionCanonica(d) != k.descripcionNorm {
+			continue
 		}
 		if _, n, ok := parseCuotas(c); ok && n == k.totalCuotas {
 			return true, nil
@@ -218,8 +221,8 @@ func (w *Writer) insertarSimples(batch []ingest.MovimientoBruto, fechaCarga stri
 		first := group[0]
 		dbCount, err := w.countByKey(first)
 		if err != nil {
-			return total, fmt.Errorf("count para llave (%s,%s,%s,%v,%s): %w",
-				first.Banco, first.Source, first.Fecha.Format("2006-01-02"), first.Monto, first.Descripcion, err)
+			return total, fmt.Errorf("count para llave (%s,%s,%v,%s): %w",
+				first.Banco, first.Fecha.Format("2006-01-02"), first.Monto, first.Descripcion, err)
 		}
 		toInsert := len(group) - dbCount
 		if toInsert <= 0 {
@@ -260,18 +263,29 @@ func parseCuotas(cuotas string) (m, n int, ok bool) {
 }
 
 type dedupKey struct {
-	banco, source, fecha, descripcion string
-	monto                             float64
+	banco, fecha, descripcionNorm string
+	monto                         float64
 }
 
+// keyOf construye la llave de dedup. Intencionalmente NO incluye `source`
+// porque la misma compra llega a sqlite con sources distintos según
+// la fuente (xlsx usa "tc_nacional", scraper usa "credit_card_billed";
+// xlsx usa "cta_corriente", scraper usa "account"). La descripción se
+// normaliza con TRIM+UPPER para tolerar variaciones de casing entre
+// fuentes (xlsx en mayúsculas, scraper en Title Case).
 func keyOf(m ingest.MovimientoBruto) dedupKey {
 	return dedupKey{
-		banco:       m.Banco,
-		source:      m.Source,
-		fecha:       m.Fecha.Format("2006-01-02"),
-		monto:       m.Monto,
-		descripcion: m.Descripcion,
+		banco:           m.Banco,
+		fecha:           m.Fecha.Format("2006-01-02"),
+		monto:           m.Monto,
+		descripcionNorm: descripcionCanonica(m.Descripcion),
 	}
+}
+
+// descripcionCanonica normaliza la descripción para la llave de dedup.
+// La descripción almacenada en BD mantiene su casing original.
+func descripcionCanonica(s string) string {
+	return strings.ToUpper(strings.TrimSpace(s))
 }
 
 func groupByDedupKey(batch []ingest.MovimientoBruto) map[dedupKey][]ingest.MovimientoBruto {
@@ -284,12 +298,31 @@ func groupByDedupKey(batch []ingest.MovimientoBruto) map[dedupKey][]ingest.Movim
 }
 
 func (w *Writer) countByKey(m ingest.MovimientoBruto) (int, error) {
-	var n int
-	err := w.db.QueryRow(`SELECT COUNT(*) FROM movimientos
-		WHERE banco = ? AND source = ? AND fecha = ? AND monto = ? AND descripcion = ?`,
-		m.Banco, m.Source, m.Fecha.Format("2006-01-02"), m.Monto, m.Descripcion,
-	).Scan(&n)
-	return n, err
+	// La comparación de descripción canónica se hace en Go: sqlite UPPER
+	// no normaliza caracteres unicode (UPPER("Café") devuelve "CAFé") y
+	// quedaríamos vulnerables a falsos negativos. Traemos las filas que
+	// coinciden en (banco, fecha, monto) y comparamos en memoria.
+	rows, err := w.db.Query(`SELECT descripcion FROM movimientos
+		WHERE banco = ? AND fecha = ? AND monto = ?`,
+		m.Banco, m.Fecha.Format("2006-01-02"), m.Monto,
+	)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	target := descripcionCanonica(m.Descripcion)
+	count := 0
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return 0, err
+		}
+		if descripcionCanonica(d) == target {
+			count++
+		}
+	}
+	return count, rows.Err()
 }
 
 func (w *Writer) insertOne(m ingest.MovimientoBruto, fechaCarga string) error {
