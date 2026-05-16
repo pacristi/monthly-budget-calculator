@@ -149,6 +149,40 @@
                 </table>
             </div>
         </section>
+
+        <section class="panel" id="panel-sueldo">
+            <div class="panel-header">
+                <h2>Patrones para detectar el sueldo</h2>
+            </div>
+            <div class="panel-body">
+                <p class="configs-help">
+                    Substrings (sin distinción de mayúsculas) que el sistema usa para identificar tu depósito de sueldo.
+                    Si tu empleador escribe la descripción como <code>"PAGO DE SUELDOS 12345"</code>, alcanza con poner <code>pago de sueldos</code>.
+                </p>
+                <ul class="lista-strings" id="lista-sueldo"></ul>
+                <div class="lista-strings-form">
+                    <input type="text" id="input-nuevo-sueldo" class="form-control" placeholder="ej: remuneracion">
+                    <button class="btn btn-primary" id="btn-agregar-sueldo" type="button">+ Agregar</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" id="panel-exclusiones">
+            <div class="panel-header">
+                <h2>Exclusiones (gastos a ignorar)</h2>
+            </div>
+            <div class="panel-body">
+                <p class="configs-help">
+                    Substrings que si aparecen en la descripción de un movimiento, lo descartan del cálculo del presupuesto.
+                    Útil para traspasos a cuentas propias, ahorros, pagos de TC, etc.
+                </p>
+                <ul class="lista-strings" id="lista-exclusiones"></ul>
+                <div class="lista-strings-form">
+                    <input type="text" id="input-nueva-exclusion" class="form-control" placeholder="ej: fintual">
+                    <button class="btn btn-primary" id="btn-agregar-exclusion" type="button">+ Agregar</button>
+                </div>
+            </div>
+        </section>
     </main>
 
     <!-- Modal para Dividir -->

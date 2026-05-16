@@ -92,6 +92,8 @@ func main() {
 	http.HandleFunc("/api/divisions", handleDivisions)
 	http.HandleFunc("/api/configs", handlerListar(repoConfigs))
 	http.HandleFunc("/api/configs/", handlerSubconfigs(repoConfigs))
+	http.HandleFunc("/api/exclusiones", handleListaStrings(&rutaExclusiones))
+	http.HandleFunc("/api/sueldo", handleListaStrings(&rutaSueldo))
 
 	fmt.Printf("Servidor iniciado en http://localhost:%s\n", *port)
 	log.Fatal(http.ListenAndServe(":"+*port, nil))
@@ -302,4 +304,44 @@ func handleDivisions(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// handleListaStrings sirve GET y POST sobre un JSON simple de la forma
+// `["a", "b", ...]`. Lo usan los endpoints de exclusiones y patrones de
+// sueldo. La ruta se pasa por puntero porque las variables globales pueden
+// estar vacías al momento de armar el handler (defaults configurados después).
+func handleListaStrings(ruta *string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if ruta == nil || *ruta == "" {
+			http.Error(w, "ruta de archivo no configurada", http.StatusBadRequest)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			lista, err := shared.LeerExclusiones(*ruta)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if lista == nil {
+				lista = []string{}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(lista)
+		case http.MethodPost:
+			var lista []string
+			if err := json.NewDecoder(r.Body).Decode(&lista); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if err := shared.EscribirListaStrings(*ruta, lista); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}
 }

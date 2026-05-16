@@ -54,6 +54,23 @@ func leerListaStrings(ruta string) ([]string, error) {
 	return out, nil
 }
 
+// EscribirListaStrings persiste una lista de strings como JSON con
+// indentación. Sobreescribe el archivo si ya existe.
+func EscribirListaStrings(ruta string, lista []string) error {
+	if ruta == "" {
+		return nil
+	}
+	// Asegura una lista vacía como `[]`, no `null`.
+	if lista == nil {
+		lista = []string{}
+	}
+	data, err := json.MarshalIndent(lista, "", "    ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(ruta, data, 0644)
+}
+
 // CoincidePatronSueldo retorna true si descripcion (case-insensitive)
 // contiene alguno de los patrones. Igual semántica que EsGastoIgnorable
 // pero conceptualmente distinto (identificación vs filtrado).
