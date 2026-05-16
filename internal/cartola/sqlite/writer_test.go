@@ -274,6 +274,40 @@ func TestInsertarConDedup_DedupCrossSource_CtaCorrienteVsAccountConCasing(t *tes
 	}
 }
 
+func TestInsertarConDedup_CompraEnCuotas_Scraper_NoMultiplicaMonto(t *testing.T) {
+	// El scraper de obchile entrega el monto TOTAL en cada fila de cuotas
+	// (al revés del xlsx). El writer NO debe multiplicarlo.
+	db := openMemDB(t)
+	if err := Up(db); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	w := NewWriter(db, "obchile")
+
+	f, _ := time.Parse("2006-01-02", "2025-01-07")
+	scraper := ingest.MovimientoBruto{
+		Banco: "bchile", Source: "credit_card_billed", Fecha: f,
+		Monto: -108372, Descripcion: "SKY AIRLINE", Cuotas: "1/3",
+	}
+	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{scraper})
+	if err != nil {
+		t.Fatalf("InsertarConDedup: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("esperaba 1 inserción, obtuve %d", n)
+	}
+
+	var monto float64
+	var cuotas string
+	db.QueryRow(`SELECT monto, cuotas FROM movimientos WHERE descripcion='SKY AIRLINE'`).
+		Scan(&monto, &cuotas)
+	if monto != -108372 {
+		t.Errorf("monto del scraper no debe multiplicarse: esperaba -108372, obtuve %v", monto)
+	}
+	if cuotas != "00/03" {
+		t.Errorf("cuotas: esperaba 00/03, obtuve %q", cuotas)
+	}
+}
+
 func TestInsertarConDedup_DedupCrossSource_CompraEnCuotas(t *testing.T) {
 	w := setupDB(t)
 
