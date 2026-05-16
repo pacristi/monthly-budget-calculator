@@ -25,6 +25,18 @@ func EsGastoIgnorable(descripcion string, exclusiones []string) bool {
 // calcular gastos. El formato es `["fintual", "ahorro x", ...]`.
 // Tolera que el archivo no exista (retorna lista vacía).
 func LeerExclusiones(ruta string) ([]string, error) {
+	return leerListaStrings(ruta)
+}
+
+// LeerPatronesSueldo lee un JSON con la lista de substrings que
+// identifican un depósito de sueldo en la descripción de un movimiento.
+// El formato es `["pago de sueldos", "pago:de sueldos", ...]`.
+// Tolera archivo inexistente (retorna lista vacía).
+func LeerPatronesSueldo(ruta string) ([]string, error) {
+	return leerListaStrings(ruta)
+}
+
+func leerListaStrings(ruta string) ([]string, error) {
 	if ruta == "" {
 		return nil, nil
 	}
@@ -40,6 +52,19 @@ func LeerExclusiones(ruta string) ([]string, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// CoincidePatronSueldo retorna true si descripcion (case-insensitive)
+// contiene alguno de los patrones. Igual semántica que EsGastoIgnorable
+// pero conceptualmente distinto (identificación vs filtrado).
+func CoincidePatronSueldo(descripcion string, patrones []string) bool {
+	desc := strings.ToLower(descripcion)
+	for _, p := range patrones {
+		if strings.Contains(desc, strings.ToLower(p)) {
+			return true
+		}
+	}
+	return false
 }
 
 // ParsearCuotas extrae la cantidad total de cuotas del formato "01/03".

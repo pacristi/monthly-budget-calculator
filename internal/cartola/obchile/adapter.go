@@ -15,23 +15,26 @@ import (
 
 // Adapter implementa presupuesto.ProveedorFinanciero para OBCL.
 type Adapter struct {
-	client       *Client
-	overrides    []shared.Override
-	exclusiones  []string
-	rutaManuales string
-	resolvedor   presupuesto.ResolvedorConfig
+	client         *Client
+	overrides      []shared.Override
+	exclusiones    []string
+	patronesSueldo []string
+	rutaManuales   string
+	resolvedor     presupuesto.ResolvedorConfig
 }
 
-func NewAdapter(rutaJson string, rutaDivisiones string, rutaExclusiones string, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
+func NewAdapter(rutaJson string, rutaDivisiones string, rutaExclusiones string, rutaSueldo string, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
 	overrides, _ := shared.LeerOverrides(rutaDivisiones)
 	exclusiones, _ := shared.LeerExclusiones(rutaExclusiones)
+	patronesSueldo, _ := shared.LeerPatronesSueldo(rutaSueldo)
 
 	return &Adapter{
-		client:       NewClient(rutaJson),
-		overrides:    overrides,
-		exclusiones:  exclusiones,
-		rutaManuales: rutaManuales,
-		resolvedor:   resolvedor,
+		client:         NewClient(rutaJson),
+		overrides:      overrides,
+		exclusiones:    exclusiones,
+		patronesSueldo: patronesSueldo,
+		rutaManuales:   rutaManuales,
+		resolvedor:     resolvedor,
 	}
 }
 
@@ -42,8 +45,7 @@ func (a *Adapter) ObtenerSueldoBase(periodo presupuesto.PeriodoPresupuestario) (
 	}
 
 	for _, mov := range movimientos {
-		desc := strings.ToLower(mov.Descripcion)
-		if strings.Contains(desc, "pago de sueldos") || strings.Contains(desc, "pago:de sueldos") {
+		if shared.CoincidePatronSueldo(mov.Descripcion, a.patronesSueldo) {
 			return math.Abs(mov.Monto), nil
 		}
 	}

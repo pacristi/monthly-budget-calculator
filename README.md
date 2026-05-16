@@ -98,7 +98,18 @@ Cada string es una substring (case-insensitive) que si aparece en la descripció
 ["pago tarjeta de credito", "fintual", "cargo por pago tc"]
 ```
 
-### 5. Inicializar la BD
+### 5. Configurar patrones del sueldo
+
+El sistema necesita reconocer qué movimiento es tu sueldo. Cada empleador escribe la descripción a su gusto: a vos puede llegarte como `"PAGO DE SUELDOS [RUT]"`, a otro como `"REMUNERACION MAYO 2026"`, etc.
+
+```bash
+cp data/sueldo.example.json data/sueldo.json
+# editar y poner los patrones que usa tu empleador
+```
+
+Cualquier substring que aparezca en la descripción del depósito sirve. Si tu empleador escribe `"REMUNERACION"`, ponés `["remuneracion"]`. Sin esto el sistema no detecta tu sueldo y el presupuesto no se calcula.
+
+### 6. Inicializar la BD
 
 ```bash
 go run ./cmd/presupuesto-cli sqlite init --db data/movimientos.db
@@ -151,7 +162,8 @@ go run ./cmd/presupuesto-cli \
   --proveedor sqlite \
   --db data/movimientos.db \
   --divisiones data/divisiones.json \
-  --exclusiones data/exclusiones.json
+  --exclusiones data/exclusiones.json \
+  --sueldo data/sueldo.json
 ```
 
 ### Abrir el dashboard web
@@ -161,7 +173,8 @@ go run ./cmd/presupuesto-api \
   --proveedor sqlite \
   --db data/movimientos.db \
   --divisiones data/divisiones.json \
-  --exclusiones data/exclusiones.json
+  --exclusiones data/exclusiones.json \
+  --sueldo data/sueldo.json
 ```
 
 Y abrís `http://localhost:8085` en tu navegador.
@@ -240,6 +253,7 @@ Si tenés otro scraper (BancoEstado, Santander, etc.) que genere un JSON con mov
 | `data/movimientos.db` | Movimientos crudos | Scraper + ingestar xlsx |
 | `data/divisiones.json` | Overrides "mi parte" | Vos (via UI o a mano) |
 | `data/exclusiones.json` | Substrings a ignorar | Vos |
+| `data/sueldo.json` | Patrones que identifican tu sueldo | Vos |
 | `data/configs-mensuales.json` | Config por mes | Vos |
 | `data/manuales.json` | Gastos manuales | Vos (a mano) |
 

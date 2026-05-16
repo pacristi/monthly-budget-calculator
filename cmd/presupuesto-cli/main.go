@@ -40,6 +40,7 @@ func main() {
 	dbPathFlag := flag.String("db", "data/movimientos.db", "Ruta al sqlite (solo si --proveedor=sqlite)")
 	divisionesFlag := flag.String("divisiones", "", "Ruta al JSON de divisiones (solo si --proveedor=sqlite; en obchile es posicional)")
 	exclusionesFlag := flag.String("exclusiones", "data/exclusiones.json", "Ruta al JSON con substrings de descripciones a ignorar (ahorros, traspasos, pagos TC)")
+	sueldoFlag := flag.String("sueldo", "data/sueldo.json", "Ruta al JSON con patrones de descripción que identifican el sueldo")
 	manualesFlag := flag.String("manuales", "data/manuales.json", "Ruta al JSON de gastos manuales")
 	flag.Parse()
 
@@ -64,7 +65,7 @@ func main() {
 			rutaDivisiones = args[1]
 		}
 		fmt.Printf("Leyendo desde JSON: %s\n", rutaJson)
-		adaptador = obchile.NewAdapter(rutaJson, rutaDivisiones, *exclusionesFlag, *manualesFlag, repoConfigs)
+		adaptador = obchile.NewAdapter(rutaJson, rutaDivisiones, *exclusionesFlag, *sueldoFlag, *manualesFlag, repoConfigs)
 	case "sqlite":
 		db, err := sql.Open("sqlite", *dbPathFlag)
 		if err != nil {
@@ -75,7 +76,7 @@ func main() {
 			log.Fatalf("migraciones: %v", err)
 		}
 		fmt.Printf("Leyendo desde sqlite: %s\n", *dbPathFlag)
-		adaptador = sqlitepkg.NewAdapter(db, *divisionesFlag, *exclusionesFlag, *manualesFlag, repoConfigs)
+		adaptador = sqlitepkg.NewAdapter(db, *divisionesFlag, *exclusionesFlag, *sueldoFlag, *manualesFlag, repoConfigs)
 	default:
 		log.Fatalf("--proveedor inválido: %s (obchile | sqlite)", *proveedorFlag)
 	}

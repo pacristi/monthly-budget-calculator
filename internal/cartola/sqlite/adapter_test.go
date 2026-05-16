@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -60,19 +61,32 @@ func periodoMayo2026() presupuesto.PeriodoPresupuestario {
 	return presupuesto.PeriodoPresupuestario{Inicio: inicio, Fin: fin}
 }
 
+// escribirPatronesSueldo deja en un archivo temporal una lista de patrones
+// para que el adapter los lea como si fueran data/sueldo.json.
+func escribirPatronesSueldo(t *testing.T, patrones ...string) string {
+	t.Helper()
+	path := t.TempDir() + "/sueldo.json"
+	body, _ := json.Marshal(patrones)
+	if err := os.WriteFile(path, body, 0644); err != nil {
+		t.Fatalf("escribiendo sueldo: %v", err)
+	}
+	return path
+}
+
 func TestAdapter_ObtenerSueldoBase_EncuentraSueldoDelPeriodo(t *testing.T) {
 	db := setupAdapterDB(t)
 	insertarMov(t, db, "2026-05-15", 1500000, "PAGO DE SUELDOS Mayo", "cta_corriente", false, "")
 	insertarMov(t, db, "2026-04-15", 1400000, "PAGO DE SUELDOS Abril", "cta_corriente", false, "")
+	sueldo := escribirPatronesSueldo(t, "pago de sueldos")
 
-	a := NewAdapter(db, "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, "", "", sueldo, "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 
-	sueldo, err := a.ObtenerSueldoBase(periodoMayo2026())
+	got, err := a.ObtenerSueldoBase(periodoMayo2026())
 	if err != nil {
 		t.Fatalf("ObtenerSueldoBase: %v", err)
 	}
-	if sueldo != 1500000 {
-		t.Errorf("esperaba 1500000 (mayo), obtuve %v", sueldo)
+	if got != 1500000 {
+		t.Errorf("esperaba 1500000 (mayo), obtuve %v", got)
 	}
 }
 
@@ -80,20 +94,31 @@ func TestAdapter_ObtenerSueldoBase_FallbackAlMesAnterior(t *testing.T) {
 	db := setupAdapterDB(t)
 	// Solo hay sueldo de abril; mayo aún no se pagó.
 	insertarMov(t, db, "2026-04-30", 1400000, "PAGO:DE SUELDOS Abril", "cta_corriente", false, "")
+	sueldo := escribirPatronesSueldo(t, "pago:de sueldos")
 
-	a := NewAdapter(db, "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
-	sueldo, err := a.ObtenerSueldoBase(periodoMayo2026())
+	a := NewAdapter(db, "", "", sueldo, "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	got, err := a.ObtenerSueldoBase(periodoMayo2026())
 	if err != nil {
 		t.Fatalf("esperaba fallback al sueldo de abril, obtuve error: %v", err)
 	}
-	if sueldo != 1400000 {
-		t.Errorf("esperaba 1400000 (sueldo de abril como fallback), obtuve %v", sueldo)
+	if got != 1400000 {
+		t.Errorf("esperaba 1400000 (sueldo de abril como fallback), obtuve %v", got)
+	}
+}
+
+func TestAdapter_ObtenerSueldoBase_SinPatronesEsError(t *testing.T) {
+	db := setupAdapterDB(t)
+	insertarMov(t, db, "2026-05-15", 1500000, "PAGO DE SUELDOS Mayo", "cta_corriente", false, "")
+	a := NewAdapter(db, "", "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	if _, err := a.ObtenerSueldoBase(periodoMayo2026()); err == nil {
+		t.Error("sin patrones de sueldo configurados debería ser error explícito")
 	}
 }
 
 func TestAdapter_ObtenerSueldoBase_NoEncontradoNiEnMesAnteriorEsError(t *testing.T) {
 	db := setupAdapterDB(t)
-	a := NewAdapter(db, "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	sueldo := escribirPatronesSueldo(t, "pago de sueldos")
+	a := NewAdapter(db, "", "", sueldo, "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	if _, err := a.ObtenerSueldoBase(periodoMayo2026()); err == nil {
 		t.Error("esperaba error por sueldo no encontrado ni en el mes ni en el anterior")
 	}
@@ -112,7 +137,7 @@ func TestAdapter_ObtenerGastosValidos_FiltraAbonosYIgnorables(t *testing.T) {
 		t.Fatalf("escribiendo exclusiones: %v", err)
 	}
 
-	a := NewAdapter(db, "", exclusionesPath, "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, "", exclusionesPath, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	gastos, err := a.ObtenerGastosValidos(periodoMayo2026())
 	if err != nil {
 		t.Fatalf("ObtenerGastosValidos: %v", err)
@@ -131,7 +156,7 @@ func TestAdapter_ObtenerGastosValidos_DetectaCreditoPorSource(t *testing.T) {
 	insertarMov(t, db, "2026-05-10", -20000, "CREDITO BCHL", "tc_nacional", false, "01/01")
 	insertarMov(t, db, "2026-05-10", -5000, "USD COMPRA", "tc_internacional", true, "")
 
-	a := NewAdapter(db, "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, "", "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	gastos, _ := a.ObtenerGastosValidos(periodoMayo2026())
 
 	if len(gastos) != 3 {
@@ -164,7 +189,7 @@ func TestAdapter_ObtenerGastosValidos_NormalizaUSD(t *testing.T) {
 	db := setupAdapterDB(t)
 	insertarMov(t, db, "2026-05-10", -10.5, "USD COMPRA", "tc_internacional", true, "")
 
-	a := NewAdapter(db, "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, "", "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	gastos, _ := a.ObtenerGastosValidos(periodoMayo2026())
 	if len(gastos) != 1 {
 		t.Fatalf("esperaba 1, obtuve %d", len(gastos))
@@ -186,7 +211,7 @@ func TestAdapter_ObtenerGastosValidos_AplicaOverride(t *testing.T) {
 		t.Fatalf("escribiendo overrides: %v", err)
 	}
 
-	a := NewAdapter(db, overridesPath, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, overridesPath, "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	gastos, _ := a.ObtenerGastosValidos(periodoMayo2026())
 	if gastos[0].MontoImputado != 4000 {
 		t.Errorf("con override: esperaba 4000, obtuve %v", gastos[0].MontoImputado)
@@ -205,7 +230,7 @@ func TestAdapter_ObtenerMovimientos_FiltraPositivosYAplicaMiParte(t *testing.T) 
 		t.Fatalf("escribiendo overrides: %v", err)
 	}
 
-	a := NewAdapter(db, overridesPath, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, overridesPath, "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	movs, err := a.ObtenerMovimientos()
 	if err != nil {
 		t.Fatalf("ObtenerMovimientos: %v", err)
