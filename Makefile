@@ -22,9 +22,11 @@ setup: ## Prepara el entorno (crea carpetas, instala dependencias de Node y Go)
 	@go mod tidy
 	@echo "✅ Entorno listo."
 
-ingest: ## Ejecuta el scraper de Node para actualizar current.json
+ingest: ## Trae cartola con el scraper y vuelca a sqlite (idempotente)
 	@echo "🏦 Obteniendo cartola del banco..."
 	@cd ingest && node scraper.js
+	@echo "💾 Volcando a sqlite..."
+	@go run $(MAIN_PATH) ingestar obchile --db data/movimientos.db --json data/current.json
 
 run: ## Ejecuta la calculadora en Go sin compilar el binario
 	@echo "🧮 Calculando presupuesto..."

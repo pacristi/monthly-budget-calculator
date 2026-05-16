@@ -11,6 +11,7 @@ import (
 	"github.com/joho/godotenv"
 	_ "modernc.org/sqlite"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
+	obchileingest "github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest/obchile"
 	"github.com/pierocristi/monthly-budget-calculator/internal/config"
 	sqlitepkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/sqlite"
 	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
@@ -19,6 +20,11 @@ import (
 func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "sqlite" {
 		runSqliteSubcommand(os.Args[2:])
+		return
+	}
+
+	if len(os.Args) >= 2 && os.Args[1] == "ingestar" {
+		runIngestarSubcommand(os.Args[2:])
 		return
 	}
 
@@ -107,6 +113,31 @@ func main() {
 		}
 		fmt.Println("=============================")
 	}
+}
+
+func runIngestarSubcommand(args []string) {
+	if len(args) < 1 {
+		log.Fatalf("Uso: presupuesto-cli ingestar {obchile|xlsx} ...")
+	}
+	switch args[0] {
+	case "obchile":
+		runIngestarObchile(args[1:])
+	default:
+		log.Fatalf("Subcomando ingestar desconocido: %s. Usos: obchile", args[0])
+	}
+}
+
+func runIngestarObchile(args []string) {
+	fs := flag.NewFlagSet("ingestar obchile", flag.ExitOnError)
+	dbPath := fs.String("db", "data/movimientos.db", "Ruta al archivo sqlite")
+	jsonPath := fs.String("json", "data/current.json", "Ruta al JSON producido por el scraper")
+	fs.Parse(args)
+
+	n, err := obchileingest.Ingestar(*jsonPath, *dbPath)
+	if err != nil {
+		log.Fatalf("ingesta obchile: %v", err)
+	}
+	fmt.Printf("Ingesta obchile: %d movimientos nuevos\n", n)
 }
 
 func runSqliteSubcommand(args []string) {
