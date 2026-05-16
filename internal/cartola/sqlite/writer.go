@@ -112,7 +112,7 @@ func (w *Writer) insertarCompraEnCuotas(batch []ingest.MovimientoBruto, fechaCar
 		if yaExiste {
 			continue
 		}
-		representante, ok := construirRepresentanteCompra(group)
+		representante, ok := construirRepresentanteCompra(group, w.origen)
 		if !ok {
 			// Solo había filas "00/N" (informativas, sin facturar). No
 			// insertamos nada todavía; cuando aparezca al menos una cuota
@@ -132,17 +132,43 @@ func (w *Writer) insertarCompraEnCuotas(batch []ingest.MovimientoBruto, fechaCar
 // (no la cuota individual), porque el dominio divide MontoImputado entre
 // Cuotas al proyectar al mes.
 //
-// Estrategia:
-//   - Considera sólo las filas con M>=1 (cuotas facturadas). Las "00/N"
-//     son informativas, no se han facturado.
-//   - Si tenemos las N cuotas facturadas → total = suma exacta.
-//   - Si tenemos K<N cuotas → estima total = round(suma/K * N). Se
-//     refinará en cargas posteriores (pero como ya guardamos una fila,
-//     hoy no se actualiza — ver compraEnCuotasYaEnBD).
+// Convenciones distintas según la fuente:
+//   - xlsx: cada fila tiene monto = CUOTA individual. Total = suma de cuotas
+//     facturadas (o estimación cuota * N si solo conocemos algunas).
+//   - obchile (scraper): cada movimiento ya tiene monto = TOTAL de la compra.
+//     No se multiplica; se usa tal cual.
 //
-// Retorna (representante, true) si pudo construirla, (zero, false) si
-// el grupo no contiene cuotas facturadas.
-func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.MovimientoBruto, bool) {
+// Las filas "00/N" del xlsx son informativas (sin facturar) y se ignoran.
+//
+// Retorna (representante, true) si pudo construirla, (zero, false) si el
+// grupo no contiene cuotas que aporten monto (todas "00/N").
+func construirRepresentanteCompra(group []ingest.MovimientoBruto, origen string) (ingest.MovimientoBruto, bool) {
+	if origen == "obchile" {
+		return representanteDesdeScraper(group)
+	}
+	return representanteDesdeXlsx(group)
+}
+
+// representanteDesdeScraper: el monto del scraper ya es el total. Cada
+// movimiento del scraper representa la compra completa; usamos el primero
+// con cuota M>=1 (las "00/N" no existen en el scraper, pero por las dudas
+// las saltamos).
+func representanteDesdeScraper(group []ingest.MovimientoBruto) (ingest.MovimientoBruto, bool) {
+	for _, m := range group {
+		mNum, n, ok := parseCuotas(m.Cuotas)
+		if !ok || mNum == 0 {
+			continue
+		}
+		base := m
+		base.Cuotas = fmt.Sprintf("00/%02d", n)
+		return base, true
+	}
+	return ingest.MovimientoBruto{}, false
+}
+
+// representanteDesdeXlsx: cada fila trae la cuota individual. Sumamos
+// las cuotas facturadas (M>=1); si tenemos K<N estimamos total = avg * N.
+func representanteDesdeXlsx(group []ingest.MovimientoBruto) (ingest.MovimientoBruto, bool) {
 	var base ingest.MovimientoBruto
 	baseM := -1
 	var sumCuotas float64
@@ -170,8 +196,6 @@ func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.Movimi
 		return ingest.MovimientoBruto{}, false
 	}
 
-	// Calcular el total. Si tenemos todas las cuotas, suma exacta. Si no,
-	// extrapolar.
 	var montoTotal float64
 	if cuotasFacturadas == totalCuotas {
 		montoTotal = sumCuotas
