@@ -21,14 +21,13 @@ import (
 )
 
 var (
-	rutaJson          string
-	rutaDivisiones    string
-	repoConfigs       *config.RepoJSON
-	proveedor         string
-	dbPath            string
-	rutaDivisionesArg string
-	rutaManuales      string
-	db                *sql.DB
+	rutaJson       string
+	rutaDivisiones string
+	repoConfigs    *config.RepoJSON
+	proveedor      string
+	dbPath         string
+	rutaManuales   string
+	db             *sql.DB
 )
 
 func main() {
@@ -44,7 +43,6 @@ func main() {
 
 	proveedor = *proveedorFlag
 	dbPath = *dbPathFlag
-	rutaDivisionesArg = *divisionesFlag
 	rutaManuales = *manualesFlag
 
 	repoConfigs = config.NewRepoJSON(*rutaConfigsFlag)
@@ -64,6 +62,7 @@ func main() {
 			rutaDivisiones = args[1]
 		}
 	case "sqlite":
+		rutaDivisiones = *divisionesFlag
 		var err error
 		db, err = sql.Open("sqlite", dbPath)
 		if err != nil {
@@ -94,7 +93,7 @@ func main() {
 
 func nuevoAdaptador() presupuesto.ProveedorFinanciero {
 	if proveedor == "sqlite" {
-		return sqlitepkg.NewAdapter(db, rutaDivisionesArg, rutaManuales, repoConfigs)
+		return sqlitepkg.NewAdapter(db, rutaDivisiones, rutaManuales, repoConfigs)
 	}
 	return obchile.NewAdapter(rutaJson, rutaDivisiones, rutaManuales, repoConfigs)
 }
