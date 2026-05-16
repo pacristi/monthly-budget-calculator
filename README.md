@@ -1,278 +1,157 @@
 # Calculadora de Presupuesto Mensual 💸
 
-Una herramienta personal que te dice **cuánta plata tenés disponible para el mes**, considerando tu sueldo, tus gastos pasados, y las cuotas futuras que ya tenés comprometidas.
+Una herramienta que te dice **cuánta plata tenés disponible este mes**, considerando tu sueldo, tus gastos del mes, y las cuotas futuras ya comprometidas.
 
-No es una app SaaS, no es un servicio en la nube. Es un proyecto que corre **localmente en tu computador**, lee tus cartolas, y te muestra un dashboard simple. Tu data no sale de tu máquina.
+Corre **localmente en tu computador**. Tu data nunca sale de tu máquina.
 
-## ¿Para quién es esto?
+---
 
-Para alguien que:
+## Quick start (3 comandos)
 
-- Tiene cuenta corriente y/o tarjeta(s) de crédito.
-- Quiere ver mes a mes cuánto le queda disponible después de gastos y cuotas.
-- Quiere poder marcar gastos compartidos (ej: cuenta de luz dividida con la pareja, asado con amigos donde solo pongo $20.000).
-- Está cómodo abriendo una terminal y corriendo un par de comandos.
-
-Si te suena, seguí leyendo.
-
-## ¿Qué hace?
-
-1. **Lee tus movimientos** desde dos fuentes:
-   - Un scraper automático (hoy soporta Banco de Chile vía [open-banking-chile](https://www.npmjs.com/package/open-banking-chile)).
-   - Cartolas históricas que descargás del banco en formato `.xls`.
-2. Los guarda en una BD local sqlite (un solo archivo `data/movimientos.db`).
-3. Te muestra un dashboard web con:
-   - **Sueldo** del mes.
-   - **Presupuesto disponible** para gastos (un % configurable del sueldo).
-   - **Gastos del mes** ya cargados (incluyendo cuotas futuras de compras anteriores).
-   - **Disponible restante**.
-   - **Tabla de movimientos** con dos botones por fila: "editar mi parte" y "no contar".
-   - **Proyección** de los próximos N meses (cuotas comprometidas).
-
-## Bancos y proveedores soportados
-
-| Banco | Cuenta corriente | TC Nacional | TC Internacional | Scraper diario |
-|---|---|---|---|---|
-| Banco de Chile | ✅ | ✅ | ✅ | ✅ (vía OBChile) |
-
-¿No está tu banco? Mirá la sección [Cómo extender](#cómo-extender-a-otro-banco).
-
-## Setup (primera vez)
-
-### Prerequisitos
-
-- Go ≥ 1.25
-- Node.js (solo si vas a usar el scraper diario)
-- Git
-
-### 1. Clonar e instalar
+Si tenés Go y Node instalados:
 
 ```bash
 git clone https://github.com/pacristi/monthly-budget-calculator
 cd monthly-budget-calculator
-make setup
+make start
 ```
 
-Esto crea las carpetas necesarias, instala deps del scraper Node y resuelve los módulos Go.
+`make start` te va a hacer un par de preguntas (banco, RUT, clave), traer tu cartola del día, y abrirte el dashboard en `http://localhost:8085`.
 
-### 2. Configurar tu config mensual
+**Eso es todo.** No necesitás más para usarlo día a día.
 
-Editá `data/configs-mensuales.json` (te lo crea `make setup` vacío). Ejemplo:
+---
 
-```json
-[
-  {
-    "mesDesde": "2025-01",
-    "porcentajeParaGastos": 0.5,
-    "diaDeCorteCredito": 22,
-    "tasaCambioUSD": 950
-  }
-]
-```
+## ¿Qué hace el dashboard?
 
-- `porcentajeParaGastos`: qué fracción de tu sueldo destinás a gastos. Si ganás $1M y querés tener un presupuesto de $500.000, ponés `0.5`.
-- `diaDeCorteCredito`: el día del mes en que tu banco cierra el período de tu TC.
-- `tasaCambioUSD`: para convertir gastos en USD (la TC internacional) a CLP.
-
-### 3. Configurar credenciales del scraper
-
-Si vas a usar el scraper diario, creá un `.env` en la raíz:
-
-```env
-BANCO_RUT=20.430.095-K
-BANCO_PASS=tu_clave_internet
-```
-
-### 4. Configurar exclusiones (opcional pero recomendado)
-
-Hay descripciones que el sistema **debería ignorar** porque no son gastos reales (traspasos a tu propia cuenta de ahorro, pagos de la tarjeta de crédito desde tu cuenta corriente, etc.).
-
-```bash
-cp data/exclusiones.example.json data/exclusiones.json
-# editar y poner substrings tuyas
-```
-
-Cada string es una substring (case-insensitive) que si aparece en la descripción, el movimiento se ignora. Ejemplos:
-
-```json
-["pago tarjeta de credito", "fintual", "cargo por pago tc"]
-```
-
-### 5. Configurar patrones del sueldo
-
-El sistema necesita reconocer qué movimiento es tu sueldo. Cada empleador escribe la descripción a su gusto: a vos puede llegarte como `"PAGO DE SUELDOS [RUT]"`, a otro como `"REMUNERACION MAYO 2026"`, etc.
-
-```bash
-cp data/sueldo.example.json data/sueldo.json
-# editar y poner los patrones que usa tu empleador
-```
-
-Cualquier substring que aparezca en la descripción del depósito sirve. Si tu empleador escribe `"REMUNERACION"`, ponés `["remuneracion"]`. Sin esto el sistema no detecta tu sueldo y el presupuesto no se calcula.
-
-### 6. Inicializar la BD
-
-```bash
-go run ./cmd/presupuesto-cli sqlite init --db data/movimientos.db
-```
-
-## Cargar tu histórico
-
-El scraper diario solo trae movimientos del mes corriente. Para tener histórico, descargás tus cartolas `.xls` desde la web de tu banco y las cargás una vez.
-
-**Convención**: un directorio = una `(banco, tipo de cuenta, año)`.
-
-Ej. para Banco de Chile, descargás todos tus `.xls` de 2025 de cuenta corriente y los pones en una carpeta. Después:
-
-```bash
-go run ./cmd/presupuesto-cli ingestar xlsx \
-  --banco bchile \
-  --tipo cta-corriente \
-  --año 2025 \
-  --dir "/ruta/a/Cuenta Corriente/2025"
-```
-
-Y lo mismo por cada año × tipo:
-
-```bash
-# TC nacional 2025
-... --tipo tc-nacional --dir ".../Tarjeta de Credito/nacional/2025"
-
-# TC internacional 2025
-... --tipo tc-internacional --dir ".../Tarjeta de Credito/Internacional/2025"
-
-# Y repetir para 2026, etc.
-```
-
-Es **idempotente**: si corrés el mismo comando dos veces, no duplica nada.
+- 💰 **Sueldo detectado** del mes.
+- 🎯 **Presupuesto para gastos** (un % configurable de tu sueldo).
+- 📊 **Carga del mes**: lo que ya gastaste + las cuotas que se facturan este mes.
+- ✨ **Disponible restante**.
+- 📋 **Tabla de movimientos** con dos botones por fila:
+  - **Editar mi parte** — para gastos compartidos (asado donde solo pusiste $20.000 de $80.000).
+  - **No contar** — para gastos que te van a devolver o que no son tuyos.
+- 🔮 **Proyección** de los próximos meses (cuotas comprometidas).
+- ⚙️ **Pestaña Configuración** para editar exclusiones, patrones de sueldo y configs mensuales desde la UI.
 
 ## Uso diario
 
-### Trae cartola de hoy
+```bash
+make ingest    # trae la cartola de hoy
+make serve     # abre el dashboard
+```
+
+O ponés `make ingest` en un cron y `make serve` corriendo en background.
+
+## Bancos soportados
+
+Cualquier banco soportado por [open-banking-chile](https://www.npmjs.com/package/open-banking-chile):
+
+- Banco de Chile (`bchile`) — usado y testeado por el autor.
+- Banco Estado (`banco_estado`).
+- Santander (`santander`).
+- BCI (`bci`).
+- (y otros — ver el paquete)
+
+Lo configurás con `BANCO_ID=...` en tu `.env`. El wizard `make start` lo pregunta la primera vez.
+
+## Configuración
+
+El wizard te crea los archivos por defecto, pero podés ajustarlos:
+
+| Archivo | Qué controla |
+|---|---|
+| `.env` | Credenciales y banco |
+| `data/sueldo.json` | Substrings que identifican tu depósito de sueldo (ej. `["pago de sueldos"]`) |
+| `data/exclusiones.json` | Substrings de gastos que el sistema ignora (ej. ahorros, traspasos a vos mismo) |
+| `data/divisiones.json` | Overrides de "mi parte" — se administra desde la UI |
+| `data/configs-mensuales.json` | % de gastos, día de corte de la TC, tasa USD — se administra desde la UI |
+
+**Todo es editable desde la pestaña Configuración del dashboard.** No tenés que tocar JSONs a mano.
+
+---
+
+## ¿Cuándo necesito algo más?
+
+El modo simple usa el **scraper diario**, que típicamente trae solo movimientos del mes en curso. Si querés:
+
+- Ver presupuestos de meses pasados.
+- Cargar histórico desde cartolas `.xls` que descargás del banco.
+- Tener tu data persistida localmente sin depender del scraper.
+
+...entonces te interesa el **modo avanzado** abajo. **No es necesario para uso normal.**
+
+---
+
+## Avanzado: histórico con cartolas `.xls`
+
+### Cuándo
+
+- Querés ver el presupuesto de hace 6 meses.
+- Querés que las cuotas comprometidas en los últimos meses se sigan proyectando aunque el scraper ya no las traiga.
+- Querés persistir tu data en una BD local (sqlite) en vez de re-scrapear cada día.
+
+### Cómo
+
+1. **Inicializar la BD:**
 
 ```bash
-make ingest
+make sqlite-init
 ```
 
-Esto corre el scraper y vuelca al sqlite. Idempotente.
-
-### Ver el presupuesto del mes (CLI)
+2. **Cargar histórico** desde cartolas `.xls` (las que descargás de la web del banco). Una corrida por (año × tipo de cuenta):
 
 ```bash
-go run ./cmd/presupuesto-cli \
-  --proveedor sqlite \
-  --db data/movimientos.db \
-  --divisiones data/divisiones.json \
-  --exclusiones data/exclusiones.json \
-  --sueldo data/sueldo.json
+make ingest-xlsx-cta-corriente AÑO=2025 DIR="/path/a/Cuenta Corriente/2025"
+make ingest-xlsx-tc-nacional   DIR="/path/a/Tarjeta de Credito/Nacional/2025"
+make ingest-xlsx-tc-internacional DIR="/path/a/Tarjeta de Credito/Internacional/2025"
 ```
 
-### Abrir el dashboard web
+(Idempotente: si lo corrés dos veces, no duplica.)
+
+3. **Cambiar al modo sqlite:**
 
 ```bash
-go run ./cmd/presupuesto-api \
-  --proveedor sqlite \
-  --db data/movimientos.db \
-  --divisiones data/divisiones.json \
-  --exclusiones data/exclusiones.json \
-  --sueldo data/sueldo.json
+make ingest-sqlite   # scraper + volcado al sqlite (reemplaza `make ingest`)
 ```
 
-Y abrís `http://localhost:8085` en tu navegador.
+Y para el dashboard / cálculo:
 
-### "Editar mi parte" / "No contar"
-
-En la tabla de movimientos vas a ver dos botones por fila:
-
-- **Editar mi parte**: para gastos compartidos. Si un asado costó $50.000 y solo pusiste $20.000, abrís el modal y ponés $20.000 como "mi parte". El presupuesto solo descuenta $20.000.
-- **No contar**: atajo para marcar un gasto como `mi parte = 0`. Útil cuando un amigo te paga después o cuando el cargo te lo van a devolver.
-
-Estos se persisten en `data/divisiones.json`. Es solo tuyo, no toca la BD de movimientos.
-
-## Cómo extender a otro banco
-
-Si tu banco no es Banco de Chile, podés agregarlo:
-
-### Para cartolas .xls
-
-Implementás la interfaz `ParserCartolaXLSX`:
-
-```go
-type ParserCartolaXLSX interface {
-    Banco() string
-    Source() string
-    Parsear(path string, año int) ([]ingest.MovimientoBruto, error)
-}
-```
-
-Mirá `internal/cartola/ingest/xlsx/bchile_cta_corriente.go` como referencia. El patrón es:
-
-1. Una capa de I/O que abre el `.xls` con `extrame/xls` y extrae filas crudas.
-2. Una capa pura que transforma las filas en `MovimientoBruto`, aplicando filtros y normalizando signos.
-
-Después agregás tu parser al switch en `cmd/presupuesto-cli/main.go:elegirParserXlsx`.
-
-### Para un scraper distinto
-
-Si tenés otro scraper (BancoEstado, Santander, etc.) que genere un JSON con movimientos, podés:
-
-1. Adaptar `internal/cartola/ingest/obchile/ingestor.go` o crear un paquete análogo.
-2. Mapear cada movimiento a `MovimientoBruto`.
-3. Agregar un subcomando `presupuesto-cli ingestar <tu-scraper> --json ...`.
-
-## Arquitectura (en una imagen mental)
-
-```
-┌─────────────────┐     ┌──────────────────┐
-│  Scraper (Node) │────▶│  current.json    │
-│  (OBChile, etc) │     └──────────────────┘
-└─────────────────┘              │
-                                 ▼
-┌─────────────────┐     ┌──────────────────────────────┐     ┌──────────────────┐
-│  Cartolas .xls  │────▶│  sqlite/movimientos.db       │◀────│ divisiones.json  │
-│  (histórico)    │     │  (raw layer + dedup)         │     │ exclusiones.json │
-└─────────────────┘     └──────────────────────────────┘     └──────────────────┘
-                                 │                                    │
-                                 │                                    ▼
-                                 │                          (overrides personales)
-                                 ▼
-                       ┌──────────────────────┐
-                       │  Adapter sqlite      │ ───▶ presupuesto.Gasto[]
-                       │  (filtros, signos,   │      │
-                       │   cuotas)            │      ▼
-                       └──────────────────────┘    Calculadora ──▶ "te quedan $X"
-```
-
-- **Raw layer**: el sqlite guarda movimientos como los entrega el banco, sin opinión.
-- **Adapter**: aplica overrides, exclusiones y normalización USD → CLP.
-- **Calculadora**: distribuye cuotas y suma cargas del mes.
-
-## Estructura de archivos personales
-
-| Archivo | Qué contiene | Quién lo gestiona |
-|---|---|---|
-| `data/movimientos.db` | Movimientos crudos | Scraper + ingestar xlsx |
-| `data/divisiones.json` | Overrides "mi parte" | Vos (via UI o a mano) |
-| `data/exclusiones.json` | Substrings a ignorar | Vos |
-| `data/sueldo.json` | Patrones que identifican tu sueldo | Vos |
-| `data/configs-mensuales.json` | Config por mes | Vos |
-| `data/manuales.json` | Gastos manuales | Vos (a mano) |
-
-Todos están en `.gitignore`. Solo el repo tiene los `.example.json`.
-
-## Problemas comunes
-
-**"Sueldo no encontrado en periodo"**: si es el primer día del mes y todavía no te depositaron, el sistema usa el sueldo del mes anterior como estimación automáticamente. Si tampoco hay registro de mes anterior (BD recién inicializada), tenés que cargar al menos un mes de histórico vía xlsx.
-
-**"Los montos están raros / inflados"**: probablemente tu BD se cargó con una versión vieja del software. Borrá la BD y volvé a cargar:
 ```bash
-rm data/movimientos.db
-go run ./cmd/presupuesto-cli sqlite init --db data/movimientos.db
-# y volver a correr los `ingestar xlsx` y `make ingest`
+go run ./cmd/presupuesto-api --proveedor sqlite --db data/movimientos.db --divisiones data/divisiones.json
 ```
-Tus overrides y configs no se tocan, solo los movimientos.
 
-**"El editar mi parte no guarda"**: asegurate de levantar el API con `--divisiones data/divisiones.json`. Si la ruta no está, el API devuelve 400.
+### Limitaciones
+
+- Solo cartolas de **Banco de Chile** tienen parsers `.xls`. Otros bancos requieren implementar un parser (interfaz `ParserCartolaXLSX` en `internal/cartola/ingest/xlsx/`).
+- El scraper de Open Banking sí funciona con varios bancos en modo simple.
+
+---
+
+## Cómo extender a otro banco con histórico `.xls`
+
+Solo si querés cargar cartolas históricas de otro banco. Pasos:
+
+1. Crear `internal/cartola/ingest/xlsx/<banco>_<tipo>.go` implementando la interfaz `ParserCartolaXLSX`.
+2. Mirar `bchile_cta_corriente.go` como referencia. El patrón:
+   - Capa I/O que abre el `.xls` con `extrame/xls`.
+   - Capa pura que transforma filas crudas a `MovimientoBruto`.
+3. Registrar el parser en el switch de `cmd/presupuesto-cli/main.go:elegirParserXlsx`.
+
+PRs bienvenidas.
+
+---
+
+## Troubleshooting
+
+**"Sueldo no encontrado"**: editá `data/sueldo.json` (o la pestaña Configuración) con la substring que aparece en tu depósito de sueldo. Ej: si tu empleador escribe `"REMUNERACION MAYO"`, agregás `remuneracion`.
+
+**"Los montos están raros"**: si pasaste por varias versiones del software, podés tener data corrupta. En modo simple no pasa (el scraper sobrescribe `data/current.json` cada vez). En modo avanzado, `rm data/movimientos.db && make sqlite-init` y volvés a cargar.
+
+**"No puedo guardar mi parte / 400 Bad Request"**: asegurate de levantar el API con `data/divisiones.json` accesible. En modo simple, `make serve` ya lo pasa correctamente.
+
+---
 
 ## Licencia
 
-Proyecto personal de [pacristi](https://github.com/pacristi). Si te sirve, mándame un PR con tu banco y lo agregamos a la lista. 🙂
+Proyecto personal de [pacristi](https://github.com/pacristi). Si te sirve y tu banco no está, mandá un PR. 🙂

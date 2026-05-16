@@ -3,51 +3,69 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
-# Variables
-APP_NAME=presupuesto-cli
-MAIN_PATH=./cmd/presupuesto-cli
+MAIN_CLI=./cmd/presupuesto-cli
+MAIN_API=./cmd/presupuesto-api
 BIN_DIR=./bin
 
-.PHONY: help setup ingest run build test clean all
+.PHONY: help start ingest serve run test build clean \
+        sqlite-init ingest-sqlite ingest-xlsx-cta-corriente ingest-xlsx-tc-nacional ingest-xlsx-tc-internacional
 
-# Comando por defecto si solo escribes 'make'
 help: ## Muestra esta ayuda
-	@egrep -h '\s##\s' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@egrep -h '\s##\s' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
-setup: ## Prepara el entorno (crea carpetas, instala dependencias de Node y Go)
-	@echo "🛠️ Configurando el entorno..."
-	@mkdir -p data/archive
-	@touch data/divisiones.json
-	@cd ingest && npm install
-	@go mod tidy
-	@echo "✅ Entorno listo."
+# ======================================================================
+# Modo simple (recomendado primera vez)
+# ======================================================================
 
-ingest: ## Trae cartola con el scraper y vuelca a sqlite (idempotente)
-	@echo "🏦 Obteniendo cartola del banco..."
+start: ## Wizard: configura .env, instala deps y levanta el dashboard
+	@bash scripts/start.sh
+
+ingest: ## Trae la cartola del día desde el banco (modo simple)
 	@cd ingest && node scraper.js
-	@echo "💾 Volcando a sqlite..."
-	@go run $(MAIN_PATH) ingestar obchile --db data/movimientos.db --json data/current.json
 
-run: ## Ejecuta la calculadora en Go sin compilar el binario
-	@echo "🧮 Calculando presupuesto..."
-	@go run $(MAIN_PATH) data/current.json data/divisiones.json
+serve: ## Levanta el dashboard web en http://localhost:8085
+	@go run $(MAIN_API) data/current.json data/divisiones.json
 
-serve: ## Levanta el servidor web con el dashboard
-	@echo "🌐 Levantando servidor en puerto 8085..."
-	@go run ./cmd/presupuesto-api data/current.json data/divisiones.json
+run: ## Imprime el cálculo del presupuesto en consola
+	@go run $(MAIN_CLI) data/current.json data/divisiones.json
 
-build: ## Compila el binario de Go para producción
-	@echo "🔨 Compilando binario..."
+test: ## Corre los tests unitarios
+	@go test ./...
+
+# ======================================================================
+# Modo avanzado: histórico con cartolas .xls + sqlite
+# Sólo necesario si querés ver meses pasados o no querés depender solo
+# del scraper diario. Ver sección "Avanzado" del README.
+# ======================================================================
+
+sqlite-init: ## (avanzado) Inicializa la BD sqlite vacía
+	@go run $(MAIN_CLI) sqlite init --db data/movimientos.db
+
+ingest-sqlite: ## (avanzado) Scraper + volcado al sqlite (idempotente)
+	@cd ingest && node scraper.js
+	@go run $(MAIN_CLI) ingestar obchile --db data/movimientos.db --json data/current.json
+
+ingest-xlsx-cta-corriente: ## (avanzado) Carga cartolas .xls de cuenta corriente. Args: AÑO=2025 DIR="ruta"
+	@test -n "$(AÑO)" || (echo 'Falta AÑO. Uso: make ingest-xlsx-cta-corriente AÑO=2025 DIR="..."' && exit 1)
+	@test -n "$(DIR)" || (echo 'Falta DIR. Uso: make ingest-xlsx-cta-corriente AÑO=2025 DIR="..."' && exit 1)
+	@go run $(MAIN_CLI) ingestar xlsx --banco bchile --tipo cta-corriente --año $(AÑO) --dir "$(DIR)" --db data/movimientos.db
+
+ingest-xlsx-tc-nacional: ## (avanzado) Carga cartolas .xls de TC nacional. Args: DIR="ruta"
+	@test -n "$(DIR)" || (echo 'Falta DIR. Uso: make ingest-xlsx-tc-nacional DIR="..."' && exit 1)
+	@go run $(MAIN_CLI) ingestar xlsx --banco bchile --tipo tc-nacional --dir "$(DIR)" --db data/movimientos.db
+
+ingest-xlsx-tc-internacional: ## (avanzado) Carga cartolas .xls de TC internacional. Args: DIR="ruta"
+	@test -n "$(DIR)" || (echo 'Falta DIR. Uso: make ingest-xlsx-tc-internacional DIR="..."' && exit 1)
+	@go run $(MAIN_CLI) ingestar xlsx --banco bchile --tipo tc-internacional --dir "$(DIR)" --db data/movimientos.db
+
+# ======================================================================
+# Utilitarios
+# ======================================================================
+
+build: ## Compila los binarios
 	@mkdir -p $(BIN_DIR)
-	@go build -o $(BIN_DIR)/$(APP_NAME) $(MAIN_PATH)
-	@echo "✅ Binario generado en $(BIN_DIR)/$(APP_NAME)"
+	@go build -o $(BIN_DIR)/presupuesto-cli $(MAIN_CLI)
+	@go build -o $(BIN_DIR)/presupuesto-api $(MAIN_API)
 
-test: ## Ejecuta los tests unitarios del dominio y shared
-	@echo "🧪 Corriendo tests..."
-	@go test -v ./internal/...
-
-clean: ## Limpia binarios (NO toca la carpeta data)
-	@echo "🧹 Limpiando..."
+clean: ## Limpia binarios (NO toca data/)
 	@rm -rf $(BIN_DIR)
-
-all: ingest run ## Flujo completo: trae datos frescos y luego calcula
