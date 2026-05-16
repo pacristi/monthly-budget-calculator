@@ -118,6 +118,7 @@ window.openDivideModal = (fecha, descripcion, monto, isUsd = false, miParteActua
     document.getElementById('modal-monto').textContent = `Monto Original: ${formatCurrency(monto, isUsd)}`;
     document.getElementById('input-fecha').value = fecha;
     document.getElementById('input-monto').value = monto;
+    document.getElementById('input-descripcion').value = descripcion;
     document.getElementById('input-is-usd').value = isUsd ? '1' : '0';
 
     const absMonto = Math.abs(monto);
@@ -146,6 +147,7 @@ form.onsubmit = async (e) => {
     e.preventDefault();
     const fecha = document.getElementById('input-fecha').value;
     const montoOriginal = parseFloat(document.getElementById('input-monto').value);
+    const descripcion = document.getElementById('input-descripcion').value;
     const miParteAbs = Math.abs(parseFloat(document.getElementById('input-mi-parte').value));
     const miParte = montoOriginal < 0 ? -miParteAbs : miParteAbs;
 
@@ -153,7 +155,7 @@ form.onsubmit = async (e) => {
         await fetch('/api/divisions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fecha, montoOriginal, miParte })
+            body: JSON.stringify({ fecha, montoOriginal, descripcion, miParte })
         });
 
         modal.classList.remove('active');

@@ -10,6 +10,7 @@ import (
 type Override struct {
 	Fecha         string  `json:"fecha"` // Formato ISO: yyyy-mm-dd
 	MontoOriginal float64 `json:"montoOriginal"`
+	Descripcion   string  `json:"descripcion"`
 	MiParte       float64 `json:"miParte"`
 }
 
@@ -31,11 +32,17 @@ func LeerOverrides(ruta string) ([]Override, error) {
 }
 
 // AplicarOverrides devuelve el monto crudo a imputar: "mi parte" si hay
-// override registrado para (fecha, montoOriginal), o el monto original tal cual.
-// La fecha debe venir en ISO (yyyy-mm-dd), igual que como se almacena en disco.
-func AplicarOverrides(montoOriginal float64, fechaISO string, overrides []Override) float64 {
+// override registrado para (fecha, montoOriginal, descripcion), o el monto
+// original tal cual. La fecha debe venir en ISO (yyyy-mm-dd).
+//
+// Si un override tiene Descripcion vacía, no matchea con nada — eso fuerza
+// que los overrides existentes se migren explícitamente.
+func AplicarOverrides(montoOriginal float64, fechaISO string, descripcion string, overrides []Override) float64 {
 	for _, o := range overrides {
-		if o.Fecha == fechaISO && o.MontoOriginal == montoOriginal {
+		if o.Descripcion == "" {
+			continue
+		}
+		if o.Fecha == fechaISO && o.MontoOriginal == montoOriginal && o.Descripcion == descripcion {
 			return o.MiParte
 		}
 	}

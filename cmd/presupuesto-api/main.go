@@ -237,7 +237,7 @@ func handleDivisions(w http.ResponseWriter, r *http.Request) {
 
 	found := false
 	for i, o := range overrides {
-		if o.Fecha == req.Fecha && o.MontoOriginal == req.MontoOriginal {
+		if o.Fecha == req.Fecha && o.MontoOriginal == req.MontoOriginal && o.Descripcion == req.Descripcion {
 			overrides[i].MiParte = req.MiParte
 			found = true
 			break
