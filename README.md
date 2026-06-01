@@ -25,14 +25,13 @@ make start
 ## ¿Qué hace el dashboard?
 
 - 💰 **Sueldo detectado** del mes.
-- 🎯 **Presupuesto para gastos** (un % configurable de tu sueldo).
-- 📊 **Carga del mes**: lo que ya gastaste + las cuotas que se facturan este mes.
-- ✨ **Disponible restante**.
-- 📋 **Tabla de movimientos** con dos botones por fila:
-  - **Editar mi parte** — para gastos compartidos (asado donde solo pusiste $20.000 de $80.000).
+- 🎯 **Categorías que reparten tu sueldo** (ej. 25% gasto, 50% inversión, 25% ahorro), cada una con su % configurable por mes.
+- 📊 **Barras por categoría**: las de tipo *meta* (ahorro/inversión) verdean al llenarse — llegar al 100% es bueno; las de tipo *límite* (gasto) enrojecen al acercarse al tope.
+- 📋 **Tabla de movimientos** con selector de categoría por fila y dos botones:
+  - **Mi parte** — para gastos compartidos (asado donde solo pusiste $20.000 de $80.000).
   - **No contar** — para gastos que te van a devolver o que no son tuyos.
-- 🔮 **Proyección** de los próximos meses (cuotas comprometidas).
-- ⚙️ **Pestaña Configuración** para editar exclusiones, patrones de sueldo y configs mensuales desde la UI.
+- 🔮 **Proyección** de los próximos meses (cuotas comprometidas; solo categorías de tipo límite).
+- ⚙️ **Pestaña Configuración** para editar categorías, reglas de categorización, patrones de sueldo y configs mensuales desde la UI.
 
 ## Uso diario
 
@@ -63,9 +62,11 @@ El wizard te crea los archivos por defecto, pero podés ajustarlos:
 |---|---|
 | `.env` | Credenciales y banco |
 | `data/sueldo.json` | Substrings que identifican tu depósito de sueldo (ej. `["pago de sueldos"]`) |
-| `data/exclusiones.json` | Substrings de gastos que el sistema ignora (ej. ahorros, traspasos a vos mismo) |
-| `data/divisiones.json` | Overrides de "mi parte" — se administra desde la UI |
-| `data/configs-mensuales.json` | % de gastos, día de corte de la TC, tasa USD — se administra desde la UI |
+| `data/categorias.json` | Categorías globales `[{id,nombre,tipo}]` (tipo: `meta` o `limite`) — se administra desde la UI |
+| `data/reglas.json` | Reglas `[{patron,destino}]` que mandan un movimiento a una categoría o a `ignorado` — se administra desde la UI |
+| `data/exclusiones.json` | Legacy: substrings a ignorar. Se migra automáticamente a reglas con destino `ignorado` |
+| `data/divisiones.json` | Overrides por movimiento: "mi parte" y/o categoría asignada a mano — se administra desde la UI |
+| `data/configs-mensuales.json` | % por categoría, día de corte de la TC, tasa USD — se administra desde la UI |
 
 **Todo es editable desde la pestaña Configuración del dashboard.** No tenés que tocar JSONs a mano.
 
