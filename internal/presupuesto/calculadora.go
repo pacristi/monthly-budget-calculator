@@ -14,27 +14,63 @@ func NewCalculadora(proveedor ProveedorFinanciero, resolvedor ResolvedorConfig) 
 	}
 }
 
-// CalcularDisponible resuelve: (X * porcentajeDelMes) - Y
-func (c *Calculadora) CalcularDisponible(periodo PeriodoPresupuestario) (float64, error) {
+// ResultadoCategoria es el estado de una categoría en un periodo: cuánto se le
+// asignó del sueldo (Presupuesto) y cuánto flujo real cayó en ella (Acumulado).
+type ResultadoCategoria struct {
+	CategoriaID string
+	Nombre      string
+	Tipo        TipoCategoria
+	Presupuesto float64 // sueldo * %
+	Acumulado   float64 // suma de la carga de los movimientos de esta categoría
+}
+
+// ResumenPresupuesto es el desglose por categoría de un periodo.
+type ResumenPresupuesto struct {
+	Sueldo     float64
+	Categorias []ResultadoCategoria
+	SinAsignar float64 // sueldo no cubierto por la suma de porcentajes
+}
+
+// CalcularResumen arma el desglose por categoría: para cada categoría devuelve
+// su presupuesto (sueldo × %) y lo acumulado (flujo real hacia esa categoría).
+func (c *Calculadora) CalcularResumen(periodo PeriodoPresupuestario, categorias []Categoria) (ResumenPresupuesto, error) {
 	cfg, err := c.resolvedor.ParaMes(periodo.Inicio)
 	if err != nil {
-		return 0, err
+		return ResumenPresupuesto{}, err
 	}
 
 	sueldo, err := c.proveedor.ObtenerSueldoBase(periodo)
 	if err != nil {
-		return 0, err
+		return ResumenPresupuesto{}, err
 	}
 
 	gastos, err := c.proveedor.ObtenerGastosValidos(periodo)
 	if err != nil {
-		return 0, err
+		return ResumenPresupuesto{}, err
 	}
 
-	var cargaMensualTotal float64
+	acumuladoPorCategoria := make(map[string]float64)
 	for _, gasto := range gastos {
-		cargaMensualTotal += gasto.CalcularCargaParaPeriodo(periodo)
+		acumuladoPorCategoria[gasto.CategoriaID] += gasto.CalcularCargaParaPeriodo(periodo)
 	}
 
-	return (sueldo * cfg.PorcentajeParaGastos) - cargaMensualTotal, nil
+	resultados := make([]ResultadoCategoria, 0, len(categorias))
+	var sumaPorcentajes float64
+	for _, cat := range categorias {
+		pct := cfg.Porcentajes[cat.ID]
+		sumaPorcentajes += pct
+		resultados = append(resultados, ResultadoCategoria{
+			CategoriaID: cat.ID,
+			Nombre:      cat.Nombre,
+			Tipo:        cat.Tipo,
+			Presupuesto: sueldo * pct,
+			Acumulado:   acumuladoPorCategoria[cat.ID],
+		})
+	}
+
+	return ResumenPresupuesto{
+		Sueldo:     sueldo,
+		Categorias: resultados,
+		SinAsignar: sueldo * (1 - sumaPorcentajes),
+	}, nil
 }
