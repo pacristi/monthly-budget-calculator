@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
 )
@@ -307,9 +308,44 @@ func keyOf(m ingest.MovimientoBruto) dedupKey {
 }
 
 // descripcionCanonica normaliza la descripción para la llave de dedup.
+// Reemplaza caracteres no alfanuméricos por espacios y elimina palabras
+// de relleno típicas que los bancos añaden cuando la transacción pasa a
+// estado facturado, para evitar falsos duplicados.
 // La descripción almacenada en BD mantiene su casing original.
 func descripcionCanonica(s string) string {
-	return strings.ToUpper(strings.TrimSpace(s))
+	var b strings.Builder
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsSpace(r) {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune(' ')
+		}
+	}
+
+	cleaned := strings.ToUpper(strings.TrimSpace(b.String()))
+	fields := strings.Fields(cleaned)
+
+	fillers := map[string]bool{
+		"COMPRAS": true,
+		"SANTIAGO": true,
+		"CL": true,
+		"INT": true,
+		"VI": true,
+		"APP": true,
+	}
+
+	var out []string
+	for _, f := range fields {
+		if !fillers[f] {
+			out = append(out, f)
+		}
+	}
+	return strings.Join(out, " ")
+}
+
+// DescripcionCanonicaExported is exported for the cleanup script.
+func DescripcionCanonicaExported(s string) string {
+	return descripcionCanonica(s)
 }
 
 func groupByDedupKey(batch []ingest.MovimientoBruto) map[dedupKey][]ingest.MovimientoBruto {
