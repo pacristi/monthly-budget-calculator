@@ -18,22 +18,21 @@ import (
 // overrides que el adapter legacy obchile, pero contra la BD en lugar
 // de un JSON puntual.
 type Adapter struct {
-	db              *sql.DB
-	overrides       []shared.Override
-	exclusiones     []string
-	patronesSueldo  []string
-	rutaManuales    string
-	resolvedor      presupuesto.ResolvedorConfig
+	db             *sql.DB
+	overrides      []shared.Override
+	reglas         []presupuesto.Regla
+	patronesSueldo []string
+	rutaManuales   string
+	resolvedor     presupuesto.ResolvedorConfig
 }
 
-func NewAdapter(db *sql.DB, rutaDivisiones, rutaExclusiones, rutaSueldo, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
+func NewAdapter(db *sql.DB, rutaDivisiones string, reglas []presupuesto.Regla, rutaSueldo, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
 	overrides, _ := shared.LeerOverrides(rutaDivisiones)
-	exclusiones, _ := shared.LeerExclusiones(rutaExclusiones)
 	patronesSueldo, _ := shared.LeerPatronesSueldo(rutaSueldo)
 	return &Adapter{
 		db:             db,
 		overrides:      overrides,
-		exclusiones:    exclusiones,
+		reglas:         reglas,
 		patronesSueldo: patronesSueldo,
 		rutaManuales:   rutaManuales,
 		resolvedor:     resolvedor,
@@ -114,13 +113,18 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 		if err := rows.Scan(&id, &fechaISO, &monto, &descripcion, &source, &isUSDInt, &cuotasStr); err != nil {
 			return nil, err
 		}
-		if shared.EsGastoIgnorable(descripcion, a.exclusiones) {
-			continue
-		}
 		fechaTransaccion, err := time.Parse("2006-01-02", fechaISO)
 		if err != nil {
 			continue
 		}
+
+		// Clasificar: override manual > regla por patrón > categoría default.
+		overrideCat := shared.CategoriaOverride(fechaISO, monto, descripcion, a.overrides)
+		categoria := presupuesto.Clasificar(descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
+		if categoria == presupuesto.Ignorado {
+			continue
+		}
+
 		cfg, err := a.resolvedor.ParaMes(fechaTransaccion)
 		if err != nil {
 			return nil, fmt.Errorf("resolviendo config %s: %w", fechaISO, err)
@@ -146,6 +150,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 				Tipo:       tipo,
 				DiaDeCorte: diaCorte,
 			},
+			CategoriaID: categoria,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -189,11 +194,13 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 				continue
 			}
 			if o.Fecha == fechaISO && o.MontoOriginal == monto && o.Descripcion == descripcion {
-				v := o.MiParte
-				miParte = &v
+				miParte = o.MiParte
 				break
 			}
 		}
+
+		overrideCat := shared.CategoriaOverride(fechaISO, monto, descripcion, a.overrides)
+		categoria := presupuesto.Clasificar(descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 
 		out = append(out, presupuesto.Movimiento{
 			Fecha:       fecha,
@@ -201,6 +208,7 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 			Monto:       monto,
 			IsUSD:       isUSDInt != 0,
 			MiParte:     miParte,
+			CategoriaID: categoria,
 		})
 	}
 	return out, rows.Err()
@@ -241,6 +249,7 @@ func (a *Adapter) leerGastosManuales() ([]presupuesto.Gasto, error) {
 			Cuotas:           dto.CuotasTotales,
 			FechaTransaccion: fechaTransaccion,
 			PoliticaCorte:    presupuesto.PoliticaCorte{Tipo: tipo, DiaDeCorte: diaCorte},
+			CategoriaID:      presupuesto.CategoriaPorDefecto,
 		})
 	}
 	return out, nil

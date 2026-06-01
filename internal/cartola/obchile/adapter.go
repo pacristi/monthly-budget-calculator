@@ -17,21 +17,20 @@ import (
 type Adapter struct {
 	client         *Client
 	overrides      []shared.Override
-	exclusiones    []string
+	reglas         []presupuesto.Regla
 	patronesSueldo []string
 	rutaManuales   string
 	resolvedor     presupuesto.ResolvedorConfig
 }
 
-func NewAdapter(rutaJson string, rutaDivisiones string, rutaExclusiones string, rutaSueldo string, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
+func NewAdapter(rutaJson string, rutaDivisiones string, reglas []presupuesto.Regla, rutaSueldo string, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
 	overrides, _ := shared.LeerOverrides(rutaDivisiones)
-	exclusiones, _ := shared.LeerExclusiones(rutaExclusiones)
 	patronesSueldo, _ := shared.LeerPatronesSueldo(rutaSueldo)
 
 	return &Adapter{
 		client:         NewClient(rutaJson),
 		overrides:      overrides,
-		exclusiones:    exclusiones,
+		reglas:         reglas,
 		patronesSueldo: patronesSueldo,
 		rutaManuales:   rutaManuales,
 		resolvedor:     resolvedor,
@@ -62,8 +61,8 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 	var gastos []presupuesto.Gasto
 
 	for i, mov := range movimientos {
-		// 1. Filtrar positivos (abonos) y exclusiones
-		if mov.Monto > 0 || shared.EsGastoIgnorable(mov.Descripcion, a.exclusiones) {
+		// 1. Filtrar positivos (abonos)
+		if mov.Monto > 0 {
 			continue
 		}
 
@@ -72,14 +71,23 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 		if err != nil {
 			continue
 		}
+		fechaISO := fechaTransaccion.Format("2006-01-02")
+
+		// 3. Clasificar: override manual > regla por patrón > categoría default.
+		//    Los movimientos clasificados como ignorados no cuentan en ningún lado.
+		overrideCat := shared.CategoriaOverride(fechaISO, mov.Monto, mov.Descripcion, a.overrides)
+		categoria := presupuesto.Clasificar(mov.Descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
+		if categoria == presupuesto.Ignorado {
+			continue
+		}
 
 		cfg, err := a.resolvedor.ParaMes(fechaTransaccion)
 		if err != nil {
 			return nil, fmt.Errorf("resolviendo config para %s: %w", mov.Fecha, err)
 		}
 
-		// 3. Aplicar override (en cruda) y luego normalizar a CLP con tasa del mes
-		montoCrudo := shared.AplicarOverrides(mov.Monto, fechaTransaccion.Format("2006-01-02"), mov.Descripcion, a.overrides)
+		// 4. Aplicar override (en cruda) y luego normalizar a CLP con tasa del mes
+		montoCrudo := shared.AplicarOverrides(mov.Monto, fechaISO, mov.Descripcion, a.overrides)
 		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, cfg.TasaCambioUSD))
 
 		// 4. Determinar política de corte (día de corte del mes del movimiento)
@@ -103,6 +111,7 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 				Tipo:       tipoPago,
 				DiaDeCorte: diaCorte,
 			},
+			CategoriaID: categoria,
 		})
 	}
 
@@ -165,6 +174,7 @@ func (a *Adapter) leerGastosManuales() ([]presupuesto.Gasto, error) {
 				Tipo:       tipoPago,
 				DiaDeCorte: diaCorte,
 			},
+			CategoriaID: presupuesto.CategoriaPorDefecto,
 		})
 	}
 
@@ -195,11 +205,13 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 				continue
 			}
 			if o.Fecha == fechaISO && o.MontoOriginal == m.Monto && o.Descripcion == m.Descripcion {
-				v := o.MiParte
-				miParte = &v
+				miParte = o.MiParte
 				break
 			}
 		}
+
+		overrideCat := shared.CategoriaOverride(fechaISO, m.Monto, m.Descripcion, a.overrides)
+		categoria := presupuesto.Clasificar(m.Descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 
 		isUSD := float64(int64(m.Monto)) != m.Monto
 
@@ -209,6 +221,7 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 			Monto:       m.Monto,
 			IsUSD:       isUSD,
 			MiParte:     miParte,
+			CategoriaID: categoria,
 		})
 	}
 	return result, nil

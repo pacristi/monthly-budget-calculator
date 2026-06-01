@@ -5,13 +5,19 @@ import (
 	"os"
 )
 
-// Override representa lo que efectivamente me tocó pagar de un movimiento,
-// en la misma moneda y signo que el monto original (cruda).
+// Override representa ajustes manuales del usuario sobre un movimiento,
+// identificado por la terna (Fecha, MontoOriginal, Descripcion). Dos ajustes
+// ortogonales pueden convivir en el mismo registro:
+//   - MiParte: lo que efectivamente me tocó pagar (split de gasto compartido),
+//     en la misma moneda y signo que el monto original. nil = no hay split;
+//     un puntero a 0 significa "No contar".
+//   - Categoria: el id de categoría asignado a mano. "" = sin override de categoría.
 type Override struct {
-	Fecha         string  `json:"fecha"` // Formato ISO: yyyy-mm-dd
-	MontoOriginal float64 `json:"montoOriginal"`
-	Descripcion   string  `json:"descripcion"`
-	MiParte       float64 `json:"miParte"`
+	Fecha         string   `json:"fecha"` // Formato ISO: yyyy-mm-dd
+	MontoOriginal float64  `json:"montoOriginal"`
+	Descripcion   string   `json:"descripcion"`
+	MiParte       *float64 `json:"miParte,omitempty"`
+	Categoria     string   `json:"categoria,omitempty"`
 }
 
 // LeerOverrides lee el archivo de reglas locales, si existe.
@@ -31,9 +37,12 @@ func LeerOverrides(ruta string) ([]Override, error) {
 	return overrides, nil
 }
 
-// AplicarOverrides devuelve el monto crudo a imputar: "mi parte" si hay
-// override registrado para (fecha, montoOriginal, descripcion), o el monto
-// original tal cual. La fecha debe venir en ISO (yyyy-mm-dd).
+// AplicarOverrides devuelve el monto crudo a imputar: "mi parte" si hay un
+// override de split registrado para (fecha, montoOriginal, descripcion), o el
+// monto original tal cual. La fecha debe venir en ISO (yyyy-mm-dd).
+//
+// Un override sin MiParte (nil) — por ejemplo uno que solo asigna categoría —
+// no toca el monto. Un MiParte de 0 sí imputa 0 ("No contar").
 //
 // Si un override tiene Descripcion vacía, no matchea con nada — eso fuerza
 // que los overrides existentes se migren explícitamente.
@@ -43,8 +52,25 @@ func AplicarOverrides(montoOriginal float64, fechaISO string, descripcion string
 			continue
 		}
 		if o.Fecha == fechaISO && o.MontoOriginal == montoOriginal && o.Descripcion == descripcion {
-			return o.MiParte
+			if o.MiParte != nil {
+				return *o.MiParte
+			}
+			return montoOriginal
 		}
 	}
 	return montoOriginal
+}
+
+// CategoriaOverride devuelve el id de categoría asignado a mano a un movimiento
+// (terna fecha, monto, descripción), o "" si no hay override de categoría.
+func CategoriaOverride(fechaISO string, montoOriginal float64, descripcion string, overrides []Override) string {
+	for _, o := range overrides {
+		if o.Descripcion == "" {
+			continue
+		}
+		if o.Fecha == fechaISO && o.MontoOriginal == montoOriginal && o.Descripcion == descripcion {
+			return o.Categoria
+		}
+	}
+	return ""
 }
