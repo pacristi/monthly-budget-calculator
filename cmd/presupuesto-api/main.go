@@ -12,20 +12,23 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	_ "modernc.org/sqlite"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/shared"
 	sqlitepkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/sqlite"
 	"github.com/pierocristi/monthly-budget-calculator/internal/config"
 	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	_ "modernc.org/sqlite"
 )
 
 var (
 	rutaJson        string
 	rutaDivisiones  string
 	rutaExclusiones string
+	rutaReglas      string
+	rutaCategorias  string
 	rutaSueldo      string
 	repoConfigs     *config.RepoJSON
+	repoCategorias  *config.RepoCategorias
 	proveedor       string
 	dbPath          string
 	rutaManuales    string
@@ -40,7 +43,9 @@ func main() {
 	proveedorFlag := flag.String("proveedor", "obchile", "Fuente: obchile (JSON del scraper, default) | sqlite")
 	dbPathFlag := flag.String("db", "data/movimientos.db", "Ruta al sqlite (solo si --proveedor=sqlite)")
 	divisionesFlag := flag.String("divisiones", "", "Ruta al JSON de divisiones")
-	exclusionesFlag := flag.String("exclusiones", "data/exclusiones.json", "Ruta al JSON con substrings de descripciones a ignorar")
+	exclusionesFlag := flag.String("exclusiones", "data/exclusiones.json", "Ruta al JSON con substrings de descripciones a ignorar (legacy, se migra a reglas)")
+	reglasFlag := flag.String("reglas", "data/reglas.json", "Ruta al JSON de reglas de categorización [{patron,destino}]")
+	categoriasFlag := flag.String("categorias", "data/categorias.json", "Ruta al JSON de categorías [{id,nombre,tipo}]")
 	sueldoFlag := flag.String("sueldo", "data/sueldo.json", "Ruta al JSON con patrones de descripción que identifican el sueldo")
 	manualesFlag := flag.String("manuales", "data/manuales.json", "Ruta al JSON de gastos manuales")
 	flag.Parse()
@@ -48,10 +53,13 @@ func main() {
 	proveedor = *proveedorFlag
 	dbPath = *dbPathFlag
 	rutaExclusiones = *exclusionesFlag
+	rutaReglas = *reglasFlag
+	rutaCategorias = *categoriasFlag
 	rutaSueldo = *sueldoFlag
 	rutaManuales = *manualesFlag
 
 	repoConfigs = config.NewRepoJSON(*rutaConfigsFlag)
+	repoCategorias = config.NewRepoCategorias(rutaCategorias)
 	if err := config.EnsureSeed(repoConfigs, config.SeedPorDefecto(time.Now())); err != nil {
 		log.Fatalf("inicializando configs: %v", err)
 	}
@@ -94,16 +102,33 @@ func main() {
 	http.HandleFunc("/api/configs/", handlerSubconfigs(repoConfigs))
 	http.HandleFunc("/api/exclusiones", handleListaStrings(&rutaExclusiones))
 	http.HandleFunc("/api/sueldo", handleListaStrings(&rutaSueldo))
+	http.HandleFunc("/api/categorias", handleCategorias)
+	http.HandleFunc("/api/reglas", handleReglas)
+	http.HandleFunc("/api/movimientos/categoria", handleMovimientoCategoria)
 
 	fmt.Printf("Servidor iniciado en http://localhost:%s\n", *port)
 	log.Fatal(http.ListenAndServe(":"+*port, nil))
 }
 
 func nuevoAdaptador() presupuesto.ProveedorFinanciero {
+	reglas, _ := shared.CargarReglas(rutaReglas, rutaExclusiones)
 	if proveedor == "sqlite" {
-		return sqlitepkg.NewAdapter(db, rutaDivisiones, rutaExclusiones, rutaSueldo, rutaManuales, repoConfigs)
+		return sqlitepkg.NewAdapter(db, rutaDivisiones, reglas, rutaSueldo, rutaManuales, repoConfigs)
 	}
-	return obchile.NewAdapter(rutaJson, rutaDivisiones, rutaExclusiones, rutaSueldo, rutaManuales, repoConfigs)
+	return obchile.NewAdapter(rutaJson, rutaDivisiones, reglas, rutaSueldo, rutaManuales, repoConfigs)
+}
+
+// idsLimite devuelve el set de ids de categorías de tipo límite (gasto). El
+// detalle de "Gastos en el Mes" y la proyección de pasivos se restringen a
+// estas: los aportes de meta (ahorro/inversión) no son gasto ni pasivo.
+func idsLimite(cats []presupuesto.Categoria) map[string]bool {
+	out := make(map[string]bool)
+	for _, c := range cats {
+		if c.Tipo == presupuesto.Limite {
+			out[c.ID] = true
+		}
+	}
+	return out
 }
 
 func handleBudget(w http.ResponseWriter, r *http.Request) {
@@ -134,13 +159,18 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	disponible, err := calc.CalcularDisponible(periodo)
+	categorias, err := repoCategorias.Listar()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	sueldo, _ := adaptador.ObtenerSueldoBase(periodo)
+	resumen, err := calc.CalcularResumen(periodo, categorias)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	gastos, _ := adaptador.ObtenerGastosValidos(periodo)
 
 	type GastoDetalle struct {
@@ -148,32 +178,54 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 		Descripcion string  `json:"descripcion"`
 		Carga       float64 `json:"carga"`
 		Cuotas      int     `json:"cuotas"`
+		CategoriaID string  `json:"categoriaId"`
 	}
 
-	var cargaTotal float64
+	esLimite := idsLimite(categorias)
 	var detalles []GastoDetalle
 	for _, g := range gastos {
+		if !esLimite[g.CategoriaID] {
+			continue // el detalle de gastos es solo de categorías límite
+		}
 		carga := g.CalcularCargaParaPeriodo(periodo)
 		if carga > 0 {
-			cargaTotal += carga
 			detalles = append(detalles, GastoDetalle{
 				Fecha:       g.FechaTransaccion.Format("2006-01-02"),
 				Descripcion: g.Descripcion,
 				Carga:       carga,
 				Cuotas:      g.Cuotas,
+				CategoriaID: g.CategoriaID,
 			})
 		}
 	}
 
-	presupuestoTotal := sueldo * cfg.PorcentajeParaGastos
+	type CategoriaRes struct {
+		ID          string  `json:"id"`
+		Nombre      string  `json:"nombre"`
+		Tipo        string  `json:"tipo"`
+		Porcentaje  float64 `json:"porcentaje"`
+		Presupuesto float64 `json:"presupuesto"`
+		Acumulado   float64 `json:"acumulado"`
+	}
+
+	cats := make([]CategoriaRes, 0, len(resumen.Categorias))
+	for _, c := range resumen.Categorias {
+		cats = append(cats, CategoriaRes{
+			ID:          c.CategoriaID,
+			Nombre:      c.Nombre,
+			Tipo:        string(c.Tipo),
+			Porcentaje:  cfg.Porcentajes[c.CategoriaID],
+			Presupuesto: c.Presupuesto,
+			Acumulado:   c.Acumulado,
+		})
+	}
 
 	response := map[string]interface{}{
-		"sueldo":            sueldo,
-		"presupuesto_total": presupuestoTotal,
-		"carga_actual":      cargaTotal,
-		"disponible":        disponible,
-		"gastos":            detalles,
-		"config":            cfg,
+		"sueldo":     resumen.Sueldo,
+		"categorias": cats,
+		"sinAsignar": resumen.SinAsignar,
+		"gastos":     detalles,
+		"config":     cfg,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -202,8 +254,23 @@ func handleProjections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// La proyección de pasivos es solo de gasto (categorías límite); los
+	// aportes de meta no son deuda comprometida a futuro.
+	categorias, err := repoCategorias.Listar()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	esLimite := idsLimite(categorias)
+	gastosLimite := make([]presupuesto.Gasto, 0, len(gastos))
+	for _, g := range gastos {
+		if esLimite[g.CategoriaID] {
+			gastosLimite = append(gastosLimite, g)
+		}
+	}
+
 	proyector := presupuesto.NewProyectorPresupuesto()
-	proyecciones := proyector.Proyectar(gastos, ahora, mesesHaciaAdelante)
+	proyecciones := proyector.Proyectar(gastosLimite, ahora, mesesHaciaAdelante)
 
 	type ProyeccionRes struct {
 		Anio              int     `json:"anio"`
@@ -241,6 +308,7 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 		Monto       float64  `json:"monto"`
 		IsUSD       bool     `json:"isUsd"`
 		MiParte     *float64 `json:"miParte,omitempty"`
+		CategoriaID string   `json:"categoriaId"`
 	}
 
 	result := make([]MovimientoRes, 0, len(movs))
@@ -251,6 +319,7 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 			Monto:       m.Monto,
 			IsUSD:       m.IsUSD,
 			MiParte:     m.MiParte,
+			CategoriaID: m.CategoriaID,
 		})
 	}
 

@@ -80,9 +80,10 @@ func handleItem(w http.ResponseWriter, r *http.Request, repo *config.RepoJSON, m
 	switch r.Method {
 	case http.MethodPut:
 		var payload struct {
-			PorcentajeParaGastos float64 `json:"porcentajeParaGastos"`
-			DiaDeCorteCredito    int     `json:"diaDeCorteCredito"`
-			TasaCambioUSD        float64 `json:"tasaCambioUSD"`
+			Porcentajes          map[string]float64 `json:"porcentajes"`
+			PorcentajeParaGastos float64            `json:"porcentajeParaGastos"`
+			DiaDeCorteCredito    int                `json:"diaDeCorteCredito"`
+			TasaCambioUSD        float64            `json:"tasaCambioUSD"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			http.Error(w, "body inválido: "+err.Error(), http.StatusBadRequest)
@@ -90,6 +91,7 @@ func handleItem(w http.ResponseWriter, r *http.Request, repo *config.RepoJSON, m
 		}
 		c := config.ConfigMensual{
 			MesDesde:             mesDesde,
+			Porcentajes:          payload.Porcentajes,
 			PorcentajeParaGastos: payload.PorcentajeParaGastos,
 			DiaDeCorteCredito:    payload.DiaDeCorteCredito,
 			TasaCambioUSD:        payload.TasaCambioUSD,

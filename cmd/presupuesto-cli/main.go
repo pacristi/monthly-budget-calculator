@@ -10,14 +10,15 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	_ "modernc.org/sqlite"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
 	obchileingest "github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest/obchile"
 	xlsxpkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest/xlsx"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
+	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/shared"
 	sqlitepkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/sqlite"
 	"github.com/pierocristi/monthly-budget-calculator/internal/config"
 	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	_ "modernc.org/sqlite"
 )
 
 func main() {
@@ -39,10 +40,14 @@ func main() {
 	proveedorFlag := flag.String("proveedor", "obchile", "Fuente: obchile (JSON del scraper, default) | sqlite")
 	dbPathFlag := flag.String("db", "data/movimientos.db", "Ruta al sqlite (solo si --proveedor=sqlite)")
 	divisionesFlag := flag.String("divisiones", "", "Ruta al JSON de divisiones (solo si --proveedor=sqlite; en obchile es posicional)")
-	exclusionesFlag := flag.String("exclusiones", "data/exclusiones.json", "Ruta al JSON con substrings de descripciones a ignorar (ahorros, traspasos, pagos TC)")
+	exclusionesFlag := flag.String("exclusiones", "data/exclusiones.json", "Ruta al JSON con substrings de descripciones a ignorar (legacy, se migra a reglas)")
+	reglasFlag := flag.String("reglas", "data/reglas.json", "Ruta al JSON de reglas de categorización [{patron,destino}]")
+	categoriasFlag := flag.String("categorias", "data/categorias.json", "Ruta al JSON de categorías [{id,nombre,tipo}]")
 	sueldoFlag := flag.String("sueldo", "data/sueldo.json", "Ruta al JSON con patrones de descripción que identifican el sueldo")
 	manualesFlag := flag.String("manuales", "data/manuales.json", "Ruta al JSON de gastos manuales")
 	flag.Parse()
+
+	reglas, _ := shared.CargarReglas(*reglasFlag, *exclusionesFlag)
 
 	fmt.Printf("Iniciando Calculadora de Presupuesto Mensual\n")
 
@@ -65,7 +70,7 @@ func main() {
 			rutaDivisiones = args[1]
 		}
 		fmt.Printf("Leyendo desde JSON: %s\n", rutaJson)
-		adaptador = obchile.NewAdapter(rutaJson, rutaDivisiones, *exclusionesFlag, *sueldoFlag, *manualesFlag, repoConfigs)
+		adaptador = obchile.NewAdapter(rutaJson, rutaDivisiones, reglas, *sueldoFlag, *manualesFlag, repoConfigs)
 	case "sqlite":
 		db, err := sql.Open("sqlite", *dbPathFlag)
 		if err != nil {
@@ -76,7 +81,7 @@ func main() {
 			log.Fatalf("migraciones: %v", err)
 		}
 		fmt.Printf("Leyendo desde sqlite: %s\n", *dbPathFlag)
-		adaptador = sqlitepkg.NewAdapter(db, *divisionesFlag, *exclusionesFlag, *sueldoFlag, *manualesFlag, repoConfigs)
+		adaptador = sqlitepkg.NewAdapter(db, *divisionesFlag, reglas, *sueldoFlag, *manualesFlag, repoConfigs)
 	default:
 		log.Fatalf("--proveedor inválido: %s (obchile | sqlite)", *proveedorFlag)
 	}
@@ -93,17 +98,17 @@ func main() {
 		log.Fatalf("Error resolviendo config del mes: %v", err)
 	}
 
-	disponible, err := calc.CalcularDisponible(periodo)
+	categorias, err := config.NewRepoCategorias(*categoriasFlag).Listar()
+	if err != nil {
+		log.Fatalf("Error leyendo categorías: %v", err)
+	}
+
+	resumen, err := calc.CalcularResumen(periodo, categorias)
 	if err != nil {
 		log.Fatalf("Error calculando presupuesto: %v", err)
 	}
 
-	sueldo, err := adaptador.ObtenerSueldoBase(periodo)
-	if err != nil {
-		fmt.Printf("Advertencia: No se pudo obtener el sueldo base: %v\n", err)
-	} else {
-		fmt.Printf("Sueldo detectado: $%.0f\n", sueldo)
-	}
+	fmt.Printf("Sueldo detectado: $%.0f\n", resumen.Sueldo)
 
 	if *detalleFlag {
 		fmt.Println("\n--- Detalle de Gastos Imputados este Mes ---")
@@ -111,18 +116,27 @@ func main() {
 		for _, g := range gastos {
 			carga := g.CalcularCargaParaPeriodo(periodo)
 			if carga > 0 {
-				fmt.Printf("[%s] %s | Monto a pagar: $%.0f (Dividido en %d cuotas)\n", g.FechaTransaccion.Format("02/01/2006"), g.Descripcion, carga, g.Cuotas)
+				fmt.Printf("[%s] %s (%s) | Monto a pagar: $%.0f (Dividido en %d cuotas)\n", g.FechaTransaccion.Format("02/01/2006"), g.Descripcion, g.CategoriaID, carga, g.Cuotas)
 			}
 		}
 		fmt.Println("--------------------------------------------")
 	}
 
-	fmt.Printf("Config del mes (heredada de %s): gasto %.0f%% · día corte %d · USD %.0f\n",
-		cfg.HeredadaDe, cfg.PorcentajeParaGastos*100, cfg.DiaDeCorteCredito, cfg.TasaCambioUSD)
-	fmt.Printf("Presupuesto para gastos (%.0f%%): $%.0f\n", cfg.PorcentajeParaGastos*100, sueldo*cfg.PorcentajeParaGastos)
-	fmt.Printf("Carga de gastos actual en el mes: $%.0f\n", (sueldo*cfg.PorcentajeParaGastos)-disponible)
+	fmt.Printf("Config del mes (heredada de %s): día corte %d · USD %.0f\n",
+		cfg.HeredadaDe, cfg.DiaDeCorteCredito, cfg.TasaCambioUSD)
 	fmt.Println("--------------------------------------------------")
-	fmt.Printf("DISPONIBLE RESTANTE PARA EL MES: $%.0f\n", disponible)
+	for _, c := range resumen.Categorias {
+		restante := c.Presupuesto - c.Acumulado
+		switch c.Tipo {
+		case presupuesto.Meta:
+			fmt.Printf("[META]   %-12s meta $%.0f · aportado $%.0f · faltan $%.0f\n", c.Nombre, c.Presupuesto, c.Acumulado, restante)
+		default:
+			fmt.Printf("[LÍMITE] %-12s tope $%.0f · gastado $%.0f · quedan $%.0f\n", c.Nombre, c.Presupuesto, c.Acumulado, restante)
+		}
+	}
+	if resumen.SinAsignar != 0 {
+		fmt.Printf("Sin asignar: $%.0f\n", resumen.SinAsignar)
+	}
 
 	if *proyectarFlag > 0 {
 		fmt.Println("\n=== Proyección de Pasivos ===")
