@@ -3,17 +3,25 @@ package config
 import (
 	"fmt"
 	"time"
+
+	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
 )
 
 // ConfigMensual es la representación persistida de una config: el mes desde
 // el que aplica y los tres valores. Es el tipo de transporte/storage; el dominio
 // usa presupuesto.ConfigPresupuesto.
 type ConfigMensual struct {
-	MesDesde             string  `json:"mesDesde"` // formato "YYYY-MM"
-	PorcentajeParaGastos float64 `json:"porcentajeParaGastos"`
-	DiaDeCorteCredito    int     `json:"diaDeCorteCredito"`
-	TasaCambioUSD        float64 `json:"tasaCambioUSD"`
+	MesDesde string `json:"mesDesde"` // formato "YYYY-MM"
+	// Porcentajes asigna un % del sueldo a cada categoría (por id). Formato nuevo.
+	Porcentajes          map[string]float64 `json:"porcentajes,omitempty"`
+	PorcentajeParaGastos float64            `json:"porcentajeParaGastos,omitempty"` // formato viejo (lectura retrocompat)
+	DiaDeCorteCredito    int                `json:"diaDeCorteCredito"`
+	TasaCambioUSD        float64            `json:"tasaCambioUSD"`
 }
+
+// CategoriaGastoLegacy es el id de categoría al que se mapea el viejo
+// porcentajeParaGastos cuando se lee una config en formato pre-categorías.
+const CategoriaGastoLegacy = presupuesto.CategoriaPorDefecto
 
 // Validar chequea las invariantes de una config.
 func (c ConfigMensual) Validar() error {
