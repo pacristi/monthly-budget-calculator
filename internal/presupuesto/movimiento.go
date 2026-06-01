@@ -10,4 +10,5 @@ type Movimiento struct {
 	Monto       float64
 	IsUSD       bool
 	MiParte     *float64 // nil cuando no hay override registrado
+	CategoriaID string   // categoría efectiva (override > regla > default); Ignorado si no cuenta
 }

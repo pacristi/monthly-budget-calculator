@@ -14,6 +14,34 @@ func mes(t *testing.T, s string) time.Time {
 	return m
 }
 
+func TestResolverParaMes_LegacyPorcentajeParaGastos(t *testing.T) {
+	// Config en formato viejo: solo porcentajeParaGastos, sin mapa de porcentajes.
+	configs := []ConfigMensual{
+		{MesDesde: "2026-01", PorcentajeParaGastos: 0.25, DiaDeCorteCredito: 25, TasaCambioUSD: 950},
+	}
+	got, err := ResolverParaMes(mes(t, "2026-01"), configs)
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if got.Porcentajes[CategoriaGastoLegacy] != 0.25 {
+		t.Errorf("legacy %% debería mapear a Porcentajes[%q]=0.25, got %+v", CategoriaGastoLegacy, got.Porcentajes)
+	}
+}
+
+func TestResolverParaMes_PorcentajesNuevos(t *testing.T) {
+	// Config nueva: mapa de porcentajes por categoría.
+	configs := []ConfigMensual{
+		{MesDesde: "2026-01", Porcentajes: map[string]float64{"gasto": 0.25, "ahorro": 0.50}, DiaDeCorteCredito: 25, TasaCambioUSD: 950},
+	}
+	got, err := ResolverParaMes(mes(t, "2026-01"), configs)
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if got.Porcentajes["gasto"] != 0.25 || got.Porcentajes["ahorro"] != 0.50 {
+		t.Errorf("debería preservar el mapa de porcentajes, got %+v", got.Porcentajes)
+	}
+}
+
 func TestResolverParaMes_DevuelveConfigExacta(t *testing.T) {
 	configs := []ConfigMensual{
 		{MesDesde: "2026-01", PorcentajeParaGastos: 0.25, DiaDeCorteCredito: 25, TasaCambioUSD: 950},

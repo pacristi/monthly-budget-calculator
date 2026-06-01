@@ -31,6 +31,7 @@ func ResolverParaMes(mes time.Time, configs []ConfigMensual) (presupuesto.Config
 		}
 		if !mesDesdeT.After(mesNormalizado) {
 			return presupuesto.ConfigPresupuesto{
+				Porcentajes:          resolverPorcentajes(c),
 				PorcentajeParaGastos: c.PorcentajeParaGastos,
 				DiaDeCorteCredito:    c.DiaDeCorteCredito,
 				TasaCambioUSD:        c.TasaCambioUSD,
@@ -40,4 +41,14 @@ func ResolverParaMes(mes time.Time, configs []ConfigMensual) (presupuesto.Config
 	}
 
 	return presupuesto.ConfigPresupuesto{}, fmt.Errorf("no hay config aplicable para %s (no hay declaraciones <= ese mes)", FormatMes(mesNormalizado))
+}
+
+// resolverPorcentajes devuelve el mapa de porcentajes por categoría. Si la
+// config trae el formato nuevo (Porcentajes), lo usa tal cual; si solo trae el
+// viejo (PorcentajeParaGastos), lo mapea a la categoría de gasto legacy.
+func resolverPorcentajes(c ConfigMensual) map[string]float64 {
+	if len(c.Porcentajes) > 0 {
+		return c.Porcentajes
+	}
+	return map[string]float64{CategoriaGastoLegacy: c.PorcentajeParaGastos}
 }

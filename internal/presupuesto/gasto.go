@@ -10,6 +10,7 @@ type Gasto struct {
 	Cuotas           int     // Default 1
 	FechaTransaccion time.Time
 	PoliticaCorte    PoliticaCorte
+	CategoriaID      string // A qué categoría de presupuesto pertenece
 }
 
 // CalcularCargaParaPeriodo determina cuánto dinero recae en el periodo consultado.

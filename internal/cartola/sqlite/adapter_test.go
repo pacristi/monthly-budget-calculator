@@ -80,7 +80,7 @@ func TestAdapter_ObtenerSueldoBase_FinanciaPeriodoConSueldoMesAnterior(t *testin
 	insertarMov(t, db, "2026-04-15", 1400000, "PAGO DE SUELDOS Abril", "cta_corriente", false, "")
 	sueldo := escribirPatronesSueldo(t, "pago de sueldos")
 
-	a := NewAdapter(db, "", "", sueldo, "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, "", nil, sueldo, "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 
 	got, err := a.ObtenerSueldoBase(periodoMayo2026())
 	if err != nil {
@@ -99,7 +99,7 @@ func TestAdapter_ObtenerSueldoBase_SueldoLlegaPrimerosDiasDelMes(t *testing.T) {
 	insertarMov(t, db, "2026-05-05", 1400000, "PAGO:DE SUELDOS Atrasado", "cta_corriente", false, "")
 	sueldo := escribirPatronesSueldo(t, "pago:de sueldos")
 
-	a := NewAdapter(db, "", "", sueldo, "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, "", nil, sueldo, "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	got, err := a.ObtenerSueldoBase(periodoMayo2026())
 	if err != nil {
 		t.Fatalf("esperaba encontrar sueldo en primeros días, obtuve error: %v", err)
@@ -112,7 +112,7 @@ func TestAdapter_ObtenerSueldoBase_SueldoLlegaPrimerosDiasDelMes(t *testing.T) {
 func TestAdapter_ObtenerSueldoBase_SinPatronesEsError(t *testing.T) {
 	db := setupAdapterDB(t)
 	insertarMov(t, db, "2026-05-15", 1500000, "PAGO DE SUELDOS Mayo", "cta_corriente", false, "")
-	a := NewAdapter(db, "", "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, "", nil, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	if _, err := a.ObtenerSueldoBase(periodoMayo2026()); err == nil {
 		t.Error("sin patrones de sueldo configurados debería ser error explícito")
 	}
@@ -121,7 +121,7 @@ func TestAdapter_ObtenerSueldoBase_SinPatronesEsError(t *testing.T) {
 func TestAdapter_ObtenerSueldoBase_NoEncontradoNiEnMesAnteriorEsError(t *testing.T) {
 	db := setupAdapterDB(t)
 	sueldo := escribirPatronesSueldo(t, "pago de sueldos")
-	a := NewAdapter(db, "", "", sueldo, "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, "", nil, sueldo, "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	if _, err := a.ObtenerSueldoBase(periodoMayo2026()); err == nil {
 		t.Error("esperaba error por sueldo no encontrado ni en el mes ni en el anterior")
 	}
@@ -130,17 +130,16 @@ func TestAdapter_ObtenerSueldoBase_NoEncontradoNiEnMesAnteriorEsError(t *testing
 func TestAdapter_ObtenerGastosValidos_FiltraAbonosYIgnorables(t *testing.T) {
 	db := setupAdapterDB(t)
 	insertarMov(t, db, "2026-05-10", -10000, "STARBUCKS", "cta_corriente", false, "")
-	insertarMov(t, db, "2026-05-15", 1500000, "PAGO DE SUELDOS", "cta_corriente", false, "")         // abono, skip
+	insertarMov(t, db, "2026-05-15", 1500000, "PAGO DE SUELDOS", "cta_corriente", false, "")        // abono, skip
 	insertarMov(t, db, "2026-05-12", -50000, "PAGO TARJETA DE CREDITO", "cta_corriente", false, "") // ignorable, skip
-	insertarMov(t, db, "2026-05-14", -30000, "Fintual ahorro", "cta_corriente", false, "")          // ignorable, skip
+	insertarMov(t, db, "2026-05-14", -30000, "Fintual ahorro", "cta_corriente", false, "")          // regla ignorado, skip
 
-	tmpDir := t.TempDir()
-	exclusionesPath := tmpDir + "/exclusiones.json"
-	if err := os.WriteFile(exclusionesPath, []byte(`["pago tarjeta de credito","fintual"]`), 0644); err != nil {
-		t.Fatalf("escribiendo exclusiones: %v", err)
+	reglas := []presupuesto.Regla{
+		{Patron: "pago tarjeta de credito", Destino: presupuesto.Ignorado},
+		{Patron: "fintual", Destino: presupuesto.Ignorado},
 	}
 
-	a := NewAdapter(db, "", exclusionesPath, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, "", reglas, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	gastos, err := a.ObtenerGastosValidos(periodoMayo2026())
 	if err != nil {
 		t.Fatalf("ObtenerGastosValidos: %v", err)
@@ -159,7 +158,7 @@ func TestAdapter_ObtenerGastosValidos_DetectaCreditoPorSource(t *testing.T) {
 	insertarMov(t, db, "2026-05-10", -20000, "CREDITO BCHL", "tc_nacional", false, "01/01")
 	insertarMov(t, db, "2026-05-10", -5000, "USD COMPRA", "tc_internacional", true, "")
 
-	a := NewAdapter(db, "", "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, "", nil, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	gastos, _ := a.ObtenerGastosValidos(periodoMayo2026())
 
 	if len(gastos) != 3 {
@@ -192,7 +191,7 @@ func TestAdapter_ObtenerGastosValidos_NormalizaUSD(t *testing.T) {
 	db := setupAdapterDB(t)
 	insertarMov(t, db, "2026-05-10", -10.5, "USD COMPRA", "tc_internacional", true, "")
 
-	a := NewAdapter(db, "", "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, "", nil, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	gastos, _ := a.ObtenerGastosValidos(periodoMayo2026())
 	if len(gastos) != 1 {
 		t.Fatalf("esperaba 1, obtuve %d", len(gastos))
@@ -214,7 +213,7 @@ func TestAdapter_ObtenerGastosValidos_AplicaOverride(t *testing.T) {
 		t.Fatalf("escribiendo overrides: %v", err)
 	}
 
-	a := NewAdapter(db, overridesPath, "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, overridesPath, nil, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	gastos, _ := a.ObtenerGastosValidos(periodoMayo2026())
 	if gastos[0].MontoImputado != 4000 {
 		t.Errorf("con override: esperaba 4000, obtuve %v", gastos[0].MontoImputado)
@@ -233,7 +232,7 @@ func TestAdapter_ObtenerMovimientos_FiltraPositivosYAplicaMiParte(t *testing.T) 
 		t.Fatalf("escribiendo overrides: %v", err)
 	}
 
-	a := NewAdapter(db, overridesPath, "", "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	a := NewAdapter(db, overridesPath, nil, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	movs, err := a.ObtenerMovimientos()
 	if err != nil {
 		t.Fatalf("ObtenerMovimientos: %v", err)
