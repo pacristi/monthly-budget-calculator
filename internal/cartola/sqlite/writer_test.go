@@ -340,3 +340,25 @@ func TestInsertarConDedup_DedupCrossSource_CompraEnCuotas(t *testing.T) {
 		t.Errorf("scraper con monto total: esperaba 0 nuevas, obtuve %d", n)
 	}
 }
+
+func TestDescripcionCanonica_Normalizacion(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"PAYU   UBER TRIP        SANTIAGO     CL", "PAYU UBER TRIP"},
+		{"PAYU *UBER TRIP COMPRAS", "PAYU UBER TRIP"},
+		{"Traspaso A:Jose", "TRASPASO A JOSE"},
+		{"Traspaso A:Maria", "TRASPASO A MARIA"},
+		{"MERPAGOCABIFY2622YXGNCKTLas Condes   CL", "MERPAGOCABIFY2622YXGNCKTLAS CONDES"},
+		{"UBER *LIME HELP.UBE COMPRAS INT.VI", "UBER LIME HELP UBE"},
+	}
+
+	for _, tt := range tests {
+		got := descripcionCanonica(tt.in)
+		if got != tt.want {
+			t.Errorf("descripcionCanonica(%q) = %q; want %q", tt.in, got, tt.want)
+		}
+	}
+}
+

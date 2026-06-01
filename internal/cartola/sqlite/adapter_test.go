@@ -73,8 +73,9 @@ func escribirPatronesSueldo(t *testing.T, patrones ...string) string {
 	return path
 }
 
-func TestAdapter_ObtenerSueldoBase_EncuentraSueldoDelPeriodo(t *testing.T) {
+func TestAdapter_ObtenerSueldoBase_FinanciaPeriodoConSueldoMesAnterior(t *testing.T) {
 	db := setupAdapterDB(t)
+	// Sueldo de abril (depositado a fin de mes/mediados) financia el mes de mayo
 	insertarMov(t, db, "2026-05-15", 1500000, "PAGO DE SUELDOS Mayo", "cta_corriente", false, "")
 	insertarMov(t, db, "2026-04-15", 1400000, "PAGO DE SUELDOS Abril", "cta_corriente", false, "")
 	sueldo := escribirPatronesSueldo(t, "pago de sueldos")
@@ -85,24 +86,26 @@ func TestAdapter_ObtenerSueldoBase_EncuentraSueldoDelPeriodo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ObtenerSueldoBase: %v", err)
 	}
-	if got != 1500000 {
-		t.Errorf("esperaba 1500000 (mayo), obtuve %v", got)
+	// El sueldo de abril (1.4M) está en la ventana [04-01, 05-11]
+	if got != 1400000 {
+		t.Errorf("esperaba 1400000 (abril financia mayo), obtuve %v", got)
 	}
 }
 
-func TestAdapter_ObtenerSueldoBase_FallbackAlMesAnterior(t *testing.T) {
+func TestAdapter_ObtenerSueldoBase_SueldoLlegaPrimerosDiasDelMes(t *testing.T) {
 	db := setupAdapterDB(t)
-	// Solo hay sueldo de abril; mayo aún no se pagó.
-	insertarMov(t, db, "2026-04-30", 1400000, "PAGO:DE SUELDOS Abril", "cta_corriente", false, "")
+	// Sueldo llega el 5 de mayo. Este sigue siendo el sueldo que financia mayo
+	// porque está en la ventana [04-01, 05-11].
+	insertarMov(t, db, "2026-05-05", 1400000, "PAGO:DE SUELDOS Atrasado", "cta_corriente", false, "")
 	sueldo := escribirPatronesSueldo(t, "pago:de sueldos")
 
 	a := NewAdapter(db, "", "", sueldo, "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	got, err := a.ObtenerSueldoBase(periodoMayo2026())
 	if err != nil {
-		t.Fatalf("esperaba fallback al sueldo de abril, obtuve error: %v", err)
+		t.Fatalf("esperaba encontrar sueldo en primeros días, obtuve error: %v", err)
 	}
 	if got != 1400000 {
-		t.Errorf("esperaba 1400000 (sueldo de abril como fallback), obtuve %v", got)
+		t.Errorf("esperaba 1400000, obtuve %v", got)
 	}
 }
 

@@ -40,28 +40,24 @@ func NewAdapter(db *sql.DB, rutaDivisiones, rutaExclusiones, rutaSueldo, rutaMan
 	}
 }
 
-// ObtenerSueldoBase busca el sueldo del periodo. Si no aparece (típico
-// los primeros días del mes, antes del pago), cae al sueldo del mes
-// anterior como estimación.
-//
-// Retorna error solo si tampoco hay registro en el mes anterior.
+// ObtenerSueldoBase busca el sueldo que financia el periodo.
+// Típicamente, el sueldo que se gasta en un mes (ej. Mayo) se deposita
+// a finales del mes anterior (ej. 30 de Abril), o en los primeros días del mes.
+// Por lo tanto, buscamos el último sueldo depositado en la ventana:
+// [Inicio del mes anterior, Inicio del mes actual + 10 días].
 func (a *Adapter) ObtenerSueldoBase(periodo presupuesto.PeriodoPresupuestario) (float64, error) {
-	if monto, ok, err := a.buscarSueldoEnRango(periodo.Inicio, periodo.Fin); err != nil {
+	iniBusqueda := periodo.Inicio.AddDate(0, -1, 0) // mes anterior
+	finBusqueda := periodo.Inicio.AddDate(0, 0, 10) // hasta el día 11 del mes actual
+
+	if monto, ok, err := a.buscarSueldoEnRango(iniBusqueda, finBusqueda); err != nil {
 		return 0, err
 	} else if ok {
 		return monto, nil
 	}
 
-	iniAnterior := periodo.Inicio.AddDate(0, -1, 0)
-	finAnterior := periodo.Inicio.Add(-time.Nanosecond)
-	if monto, ok, err := a.buscarSueldoEnRango(iniAnterior, finAnterior); err != nil {
-		return 0, err
-	} else if ok {
-		return monto, nil
-	}
-
-	return 0, fmt.Errorf("sueldo no encontrado en periodo %s — %s ni en el mes anterior",
-		periodo.Inicio.Format("2006-01-02"), periodo.Fin.Format("2006-01-02"))
+	return 0, fmt.Errorf("sueldo no encontrado para el periodo %s — %s (buscado entre %s y %s)",
+		periodo.Inicio.Format("2006-01-02"), periodo.Fin.Format("2006-01-02"),
+		iniBusqueda.Format("2006-01-02"), finBusqueda.Format("2006-01-02"))
 }
 
 // buscarSueldoEnRango busca el último movimiento positivo dentro del rango
