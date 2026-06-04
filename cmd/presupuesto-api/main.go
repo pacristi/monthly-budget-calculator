@@ -105,6 +105,7 @@ func main() {
 	http.HandleFunc("/api/categorias", handleCategorias)
 	http.HandleFunc("/api/reglas", handleReglas)
 	http.HandleFunc("/api/movimientos/categoria", handleMovimientoCategoria)
+	http.HandleFunc("/api/refresh", handleRefresh)
 
 	fmt.Printf("Servidor iniciado en http://localhost:%s\n", *port)
 	log.Fatal(http.ListenAndServe(":"+*port, nil))
