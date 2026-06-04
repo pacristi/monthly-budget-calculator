@@ -1,6 +1,6 @@
 # Calculadora de Presupuesto Mensual 💸
 
-Una herramienta que te dice **cuánta plata tenés disponible este mes**, considerando tu sueldo, tus gastos del mes, y las cuotas futuras ya comprometidas.
+Una herramienta que te dice **cuánta plata tienes disponible este mes**, considerando tu sueldo, tus gastos del mes, y las cuotas futuras ya comprometidas.
 
 Corre **localmente en tu computador**. Tu data nunca sale de tu máquina.
 
@@ -8,7 +8,7 @@ Corre **localmente en tu computador**. Tu data nunca sale de tu máquina.
 
 ## Quick start (3 comandos)
 
-Si tenés Go y Node instalados:
+Si tienes Go y Node instalados:
 
 ```bash
 git clone https://github.com/pacristi/monthly-budget-calculator
@@ -16,9 +16,9 @@ cd monthly-budget-calculator
 make start
 ```
 
-`make start` te va a hacer un par de preguntas (banco, RUT, clave), traer tu cartola del día, y abrirte el dashboard en `http://localhost:8085`.
+`make start` te va a hacer un par de preguntas (banco, RUT, clave), traer tu cartola del día, y abrir el dashboard en `http://localhost:8085`.
 
-**Eso es todo.** No necesitás más para usarlo día a día.
+**Eso es todo.** No necesitas más para usarlo día a día.
 
 ---
 
@@ -40,7 +40,7 @@ make ingest    # trae la cartola de hoy
 make serve     # abre el dashboard
 ```
 
-O ponés `make ingest` en un cron y `make serve` corriendo en background.
+O pones `make ingest` en un cron y dejas `make serve` corriendo en background.
 
 ## Bancos soportados
 
@@ -52,11 +52,11 @@ Cualquier banco soportado por [open-banking-chile](https://www.npmjs.com/package
 - BCI (`bci`).
 - (y otros — ver el paquete)
 
-Lo configurás con `BANCO_ID=...` en tu `.env`. El wizard `make start` lo pregunta la primera vez.
+Lo configuras con `BANCO_ID=...` en tu `.env`. El wizard `make start` lo pregunta la primera vez.
 
 ## Configuración
 
-El wizard te crea los archivos por defecto, pero podés ajustarlos:
+El wizard te crea los archivos por defecto, pero puedes ajustarlos:
 
 | Archivo | Qué controla |
 |---|---|
@@ -68,16 +68,16 @@ El wizard te crea los archivos por defecto, pero podés ajustarlos:
 | `data/divisiones.json` | Overrides por movimiento: "mi parte" y/o categoría asignada a mano — se administra desde la UI |
 | `data/configs-mensuales.json` | % por categoría, día de corte de la TC, tasa USD — se administra desde la UI |
 
-**Todo es editable desde la pestaña Configuración del dashboard.** No tenés que tocar JSONs a mano.
+**Todo es editable desde la pestaña Configuración del dashboard.** No tienes que tocar JSONs a mano.
 
 ---
 
 ## ¿Cuándo necesito algo más?
 
-El modo simple usa el **scraper diario**, que típicamente trae solo movimientos del mes en curso. Si querés:
+El modo simple usa el **scraper diario**, que típicamente trae solo movimientos del mes en curso. Si quieres:
 
 - Ver presupuestos de meses pasados.
-- Cargar histórico desde cartolas `.xls` que descargás del banco.
+- Cargar histórico desde cartolas `.xls` que descargas del banco.
 - Tener tu data persistida localmente sin depender del scraper.
 
 ...entonces te interesa el **modo avanzado** abajo. **No es necesario para uso normal.**
@@ -88,9 +88,9 @@ El modo simple usa el **scraper diario**, que típicamente trae solo movimientos
 
 ### Cuándo
 
-- Querés ver el presupuesto de hace 6 meses.
-- Querés que las cuotas comprometidas en los últimos meses se sigan proyectando aunque el scraper ya no las traiga.
-- Querés persistir tu data en una BD local (sqlite) en vez de re-scrapear cada día.
+- Quieres ver el presupuesto de hace 6 meses.
+- Quieres que las cuotas comprometidas en los últimos meses se sigan proyectando aunque el scraper ya no las traiga.
+- Quieres persistir tu data en una BD local (sqlite) en vez de re-scrapear cada día.
 
 ### Cómo
 
@@ -100,7 +100,7 @@ El modo simple usa el **scraper diario**, que típicamente trae solo movimientos
 make sqlite-init
 ```
 
-2. **Cargar histórico** desde cartolas `.xls` (las que descargás de la web del banco). Una corrida por (año × tipo de cuenta):
+2. **Cargar histórico** desde cartolas `.xls` (las que descargas de la web del banco). Una corrida por (año × tipo de cuenta):
 
 ```bash
 make ingest-xlsx-cta-corriente AÑO=2025 DIR="/path/a/Cuenta Corriente/2025"
@@ -108,7 +108,7 @@ make ingest-xlsx-tc-nacional   DIR="/path/a/Tarjeta de Credito/Nacional/2025"
 make ingest-xlsx-tc-internacional DIR="/path/a/Tarjeta de Credito/Internacional/2025"
 ```
 
-(Idempotente: si lo corrés dos veces, no duplica.)
+(Idempotente: si lo corres dos veces, no duplica.)
 
 3. **Cambiar al modo sqlite:**
 
@@ -131,7 +131,7 @@ go run ./cmd/presupuesto-api --proveedor sqlite --db data/movimientos.db --divis
 
 ## Cómo extender a otro banco con histórico `.xls`
 
-Solo si querés cargar cartolas históricas de otro banco. Pasos:
+Solo si quieres cargar cartolas históricas de otro banco. Pasos:
 
 1. Crear `internal/cartola/ingest/xlsx/<banco>_<tipo>.go` implementando la interfaz `ParserCartolaXLSX`.
 2. Mirar `bchile_cta_corriente.go` como referencia. El patrón:
@@ -145,14 +145,14 @@ PRs bienvenidas.
 
 ## Troubleshooting
 
-**"Sueldo no encontrado"**: editá `data/sueldo.json` (o la pestaña Configuración) con la substring que aparece en tu depósito de sueldo. Ej: si tu empleador escribe `"REMUNERACION MAYO"`, agregás `remuneracion`.
+**"Sueldo no encontrado"**: edita `data/sueldo.json` (o la pestaña Configuración) con la substring que aparece en tu depósito de sueldo. Ej: si tu empleador escribe `"REMUNERACION MAYO"`, agregas `remuneracion`.
 
-**"Los montos están raros"**: si pasaste por varias versiones del software, podés tener data corrupta. En modo simple no pasa (el scraper sobrescribe `data/current.json` cada vez). En modo avanzado, `rm data/movimientos.db && make sqlite-init` y volvés a cargar.
+**"Los montos están raros"**: si pasaste por varias versiones del software, puedes tener data corrupta. En modo simple no pasa (el scraper sobrescribe `data/current.json` cada vez). En modo avanzado, `rm data/movimientos.db && make sqlite-init` y vuelves a cargar.
 
-**"No puedo guardar mi parte / 400 Bad Request"**: asegurate de levantar el API con `data/divisiones.json` accesible. En modo simple, `make serve` ya lo pasa correctamente.
+**"No puedo guardar mi parte / 400 Bad Request"**: asegúrate de levantar el API con `data/divisiones.json` accesible. En modo simple, `make serve` ya lo pasa correctamente.
 
 ---
 
 ## Licencia
 
-Proyecto personal de [pacristi](https://github.com/pacristi). Si te sirve y tu banco no está, mandá un PR. 🙂
+Proyecto personal de [pacristi](https://github.com/pacristi). Si te sirve y tu banco no está, manda un PR. 🙂
