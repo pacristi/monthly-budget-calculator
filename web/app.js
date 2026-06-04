@@ -804,6 +804,35 @@ document.querySelectorAll('.nav-tab').forEach(t => {
 });
 
 // Initialization
+// refrescar dispara el scraper en el server (POST /api/refresh) y, al terminar,
+// recarga las vistas del dashboard. Es síncrono: el botón queda deshabilitado
+// mientras corre (puede tardar varios segundos).
+const refrescar = async () => {
+    const btn = document.getElementById('btn-refresh');
+    const textoOriginal = btn ? btn.textContent : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '↻ Refrescando...';
+    }
+    try {
+        const res = await fetch('/api/refresh', { method: 'POST' });
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        await ensureCategorias();
+        loadBudget();
+        loadProjections();
+        loadMovements();
+    } catch (e) {
+        alert('No se pudo refrescar: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = textoOriginal;
+        }
+    }
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
     const selector = document.getElementById('period-selector');
     if (selector) {
@@ -815,6 +844,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         selector.addEventListener('change', () => {
             loadBudget();
         });
+    }
+
+    const btnRefresh = document.getElementById('btn-refresh');
+    if (btnRefresh) {
+        btnRefresh.addEventListener('click', refrescar);
     }
 
     await ensureCategorias();
