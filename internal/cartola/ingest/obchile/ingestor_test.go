@@ -115,3 +115,46 @@ func TestIngestar_EsIdempotente(t *testing.T) {
 		t.Errorf("total tras segunda corrida: esperaba 3, obtuve %d", total)
 	}
 }
+
+const jsonConProvisorio = `{
+  "success": true,
+  "bank": "bchile",
+  "movements": [],
+  "accounts": [{
+    "balance": 100000,
+    "movements": [
+      {"date": "14-05-2026", "description": "SUELDO", "amount": 1500000, "source": "account", "installments": ""}
+    ]
+  }],
+  "creditCards": [{
+    "label": "Visa",
+    "movements": [
+      {"date": "10-05-2026", "description": "RESTORANT FACTURADO", "amount": -20000, "source": "credit_card_billed", "installments": ""},
+      {"date": "13-05-2026", "description": "STARBUCKS PROVISORIO", "amount": -3500, "source": "credit_card_unbilled", "installments": ""}
+    ]
+  }]
+}`
+
+func TestIngestar_NoPersisteProvisorio(t *testing.T) {
+	jsonPath := writeTempJSON(t, jsonConProvisorio)
+	dbPath, db := openTempDB(t)
+
+	insertados, err := Ingestar(jsonPath, dbPath)
+	if err != nil {
+		t.Fatalf("Ingestar: %v", err)
+	}
+	// 3 movimientos en el JSON; el unbilled no se persiste → 2.
+	if insertados != 2 {
+		t.Errorf("esperaba 2 insertados (unbilled excluido), obtuve %d", insertados)
+	}
+
+	var unbilled int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM movimientos WHERE source = 'credit_card_unbilled'`,
+	).Scan(&unbilled); err != nil {
+		t.Fatalf("count unbilled: %v", err)
+	}
+	if unbilled != 0 {
+		t.Errorf("esperaba 0 filas unbilled en BD, obtuve %d", unbilled)
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -31,6 +32,9 @@ func Ingestar(jsonPath, dbPath string) (int, error) {
 
 	brutos := make([]ingest.MovimientoBruto, 0, len(dtos))
 	for _, d := range dtos {
+		if esProvisorio(d.Source) {
+			continue // provisorio: capa viva, no se persiste
+		}
 		b, err := dtoABruto(d)
 		if err != nil {
 			return 0, fmt.Errorf("mapeando movimiento (fecha=%s desc=%s): %w", d.Fecha, d.Descripcion, err)
@@ -50,6 +54,13 @@ func Ingestar(jsonPath, dbPath string) (int, error) {
 
 	writer := sqlitepkg.NewWriter(db, "obchile")
 	return writer.InsertarConDedup(brutos)
+}
+
+// esProvisorio identifica cargos que el banco aún puede modificar (no
+// facturados). NO se persisten: son una proyección viva que se lee directo
+// del último scrape, no un hecho liquidado.
+func esProvisorio(source string) bool {
+	return strings.Contains(strings.ToLower(source), "unbilled")
 }
 
 func dtoABruto(d legacy.MovimientoDTO) (ingest.MovimientoBruto, error) {
