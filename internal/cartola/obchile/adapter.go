@@ -21,6 +21,9 @@ type Adapter struct {
 	patronesSueldo []string
 	rutaManuales   string
 	resolvedor     presupuesto.ResolvedorConfig
+	// filtroSource, si no es nil, descarta los movimientos cuyo source no
+	// lo satisface. Lo usa el modo provisorio para quedarse solo con unbilled.
+	filtroSource func(string) bool
 }
 
 func NewAdapter(rutaJson string, rutaDivisiones string, reglas []presupuesto.Regla, rutaSueldo string, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
@@ -34,6 +37,21 @@ func NewAdapter(rutaJson string, rutaDivisiones string, reglas []presupuesto.Reg
 		patronesSueldo: patronesSueldo,
 		rutaManuales:   rutaManuales,
 		resolvedor:     resolvedor,
+	}
+}
+
+// NewAdapterProvisorio construye un Adapter que sirve SOLO la capa
+// provisoria: cargos no facturados (unbilled) del último scrape. No carga
+// sueldo ni gastos manuales — esos son hechos de la capa liquidada y los
+// aporta el otro adapter del Compuesto (así se evita el doble conteo).
+func NewAdapterProvisorio(rutaJson, rutaDivisiones string, reglas []presupuesto.Regla, resolvedor presupuesto.ResolvedorConfig) *Adapter {
+	overrides, _ := shared.LeerOverrides(rutaDivisiones)
+	return &Adapter{
+		client:       NewClient(rutaJson),
+		overrides:    overrides,
+		reglas:       reglas,
+		resolvedor:   resolvedor,
+		filtroSource: shared.EsProvisorio,
 	}
 }
 
@@ -61,6 +79,11 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 	var gastos []presupuesto.Gasto
 
 	for i, mov := range movimientos {
+		// 0. Filtro de source (modo provisorio: solo unbilled). nil = sin filtro.
+		if a.filtroSource != nil && !a.filtroSource(mov.Source) {
+			continue
+		}
+
 		// 1. Filtrar positivos (abonos)
 		if mov.Monto > 0 {
 			continue
@@ -189,6 +212,9 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 
 	result := make([]presupuesto.Movimiento, 0, len(movs))
 	for _, m := range movs {
+		if a.filtroSource != nil && !a.filtroSource(m.Source) {
+			continue
+		}
 		if m.Monto >= 0 {
 			continue
 		}

@@ -177,6 +177,54 @@ func TestObtenerGastosValidos_OverrideCategoriaGana(t *testing.T) {
 	}
 }
 
+func TestAdapterProvisorio_SoloUnbilled(t *testing.T) {
+	dir := t.TempDir()
+	scraper := escribirScraper(t, dir, `
+		{"date": "10-05-2026", "description": "DEBITO ASENTADO", "amount": -10000, "source": "account"},
+		{"date": "11-05-2026", "description": "TC FACTURADA", "amount": -20000, "source": "credit_card_billed"},
+		{"date": "12-05-2026", "description": "TC PROVISORIA", "amount": -30000, "source": "credit_card_unbilled"}
+	`)
+
+	adapter := NewAdapterProvisorio(scraper, "", nil, nuevoResolvedorFake(900.0, 25))
+	gastos, err := adapter.ObtenerGastosValidos(presupuesto.PeriodoPresupuestario{})
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+
+	// Solo el movimiento unbilled debe aparecer; account y billed son
+	// liquidado y los aporta la otra capa del Compuesto.
+	if len(gastos) != 1 {
+		t.Fatalf("esperaba 1 gasto (solo unbilled), obtuve %d", len(gastos))
+	}
+	if gastos[0].Descripcion != "TC PROVISORIA" {
+		t.Errorf("esperaba el gasto provisorio, obtuve %q", gastos[0].Descripcion)
+	}
+}
+
+func TestAdapterProvisorio_NoCargaManuales(t *testing.T) {
+	dir := t.TempDir()
+	scraper := escribirScraper(t, dir, `
+		{"date": "12-05-2026", "description": "TC PROVISORIA", "amount": -30000, "source": "credit_card_unbilled"}
+	`)
+	manuales := filepath.Join(dir, "manuales.json")
+	contenido := `[{"id":"man-1","descripcion":"Manual","montoTotal":100000,"cuotasTotales":1,"fechaInicio":"15-05-2026","tipoPago":"debito"}]`
+	if err := os.WriteFile(manuales, []byte(contenido), 0644); err != nil {
+		t.Fatalf("escribiendo manuales: %v", err)
+	}
+
+	// El provisorio no recibe ruta de manuales: son hechos de la capa
+	// liquidada. Aunque exista el archivo, no debe aparecer aquí (evita
+	// doble conteo al componer).
+	adapter := NewAdapterProvisorio(scraper, "", nil, nuevoResolvedorFake(900.0, 25))
+	gastos, err := adapter.ObtenerGastosValidos(presupuesto.PeriodoPresupuestario{})
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if _, ok := gastoPorDescripcion(gastos, "Manual"); ok {
+		t.Errorf("el provisorio no debería incluir gastos manuales")
+	}
+}
+
 func TestLeerGastosManuales_ArchivoNoExiste(t *testing.T) {
 	adapter := NewAdapter("scraper_dummy.json", "", nil, "", "ruta_inexistente.json", nuevoResolvedorFake(900.0, 25))
 
