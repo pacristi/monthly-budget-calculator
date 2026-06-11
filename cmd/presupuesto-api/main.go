@@ -92,9 +92,12 @@ func main() {
 		log.Fatalf("--proveedor inválido: %s (compuesto | sqlite | obchile)", proveedor)
 	}
 
-	// Servir archivos estáticos
+	// Servir archivos estáticos. noCache fuerza al navegador a revalidar antes de
+	// usar su copia cacheada, así un deploy nuevo se ve al toque incluso en mobile
+	// (donde el hard-refresh es engorroso). FileServer ya manda Last-Modified, así
+	// que si nada cambió responde 304 (barato); solo baja bytes cuando hay cambios.
 	fs := http.FileServer(http.Dir("./web"))
-	http.Handle("/", fs)
+	http.Handle("/", noCache(fs))
 
 	// API endpoints
 	http.HandleFunc("/api/budget", handleBudget)
@@ -112,6 +115,15 @@ func main() {
 
 	fmt.Printf("Servidor iniciado en http://localhost:%s\n", *port)
 	log.Fatal(http.ListenAndServe(":"+*port, nil))
+}
+
+// noCache envuelve un handler para que el navegador revalide siempre antes de
+// servir desde su caché, evitando el bug de "JS viejo + HTML nuevo" tras un deploy.
+func noCache(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		h.ServeHTTP(w, r)
+	})
 }
 
 func nuevoAdaptador() presupuesto.ProveedorFinanciero {
