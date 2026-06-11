@@ -18,6 +18,17 @@ func NewAdapter(liquidado, provisorio presupuesto.ProveedorFinanciero) *Adapter 
 	return &Adapter{liquidado: liquidado, provisorio: provisorio}
 }
 
+// NewDesdeFuentes construye el proveedor de lectura a partir de sus fuentes.
+// El liquidado siempre está; el provisorio se compone solo si existe. Sin
+// fuente de scrape (usuario solo-xlsx) devuelve el liquidado solo, sin
+// reventar.
+func NewDesdeFuentes(liquidado, provisorio presupuesto.ProveedorFinanciero) presupuesto.ProveedorFinanciero {
+	if provisorio == nil {
+		return liquidado
+	}
+	return NewAdapter(liquidado, provisorio)
+}
+
 // ObtenerSueldoBase se delega a la capa liquidada: el sueldo es un abono de
 // cuenta ya asentado; el provisorio (cargos de TC no facturados) no lo
 // contiene.

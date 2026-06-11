@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/compuesto"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/shared"
 	sqlitepkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/sqlite"
@@ -40,8 +41,9 @@ func main() {
 
 	port := flag.String("port", "8085", "Puerto para el servidor web")
 	rutaConfigsFlag := flag.String("configs", "data/configs-mensuales.json", "Ruta del archivo de configs mensuales")
-	proveedorFlag := flag.String("proveedor", "obchile", "Fuente: obchile (JSON del scraper, default) | sqlite")
-	dbPathFlag := flag.String("db", "data/movimientos.db", "Ruta al sqlite (solo si --proveedor=sqlite)")
+	proveedorFlag := flag.String("proveedor", "compuesto", "Fuente: compuesto (sqlite liquidado + scrape provisorio, default) | sqlite (solo liquidado) | obchile (legacy)")
+	dbPathFlag := flag.String("db", "data/movimientos.db", "Ruta al sqlite (modos compuesto/sqlite)")
+	provisorioFlag := flag.String("provisorio", "data/current.json", "Ruta al JSON del último scrape (capa provisoria; modo compuesto)")
 	divisionesFlag := flag.String("divisiones", "", "Ruta al JSON de divisiones")
 	exclusionesFlag := flag.String("exclusiones", "data/exclusiones.json", "Ruta al JSON con substrings de descripciones a ignorar (legacy, se migra a reglas)")
 	reglasFlag := flag.String("reglas", "data/reglas.json", "Ruta al JSON de reglas de categorización [{patron,destino}]")
@@ -68,15 +70,16 @@ func main() {
 	case "obchile":
 		args := flag.Args()
 		if len(args) < 1 {
-			log.Fatalf("Uso: presupuesto-api [--configs <ruta>] <ruta_archivo_json> [ruta_archivo_divisiones]")
+			log.Fatalf("Uso: presupuesto-api --proveedor obchile [--configs <ruta>] <ruta_archivo_json> [ruta_archivo_divisiones]")
 		}
 		rutaJson = args[0]
 		rutaDivisiones = ""
 		if len(args) > 1 {
 			rutaDivisiones = args[1]
 		}
-	case "sqlite":
+	case "sqlite", "compuesto":
 		rutaDivisiones = *divisionesFlag
+		rutaJson = *provisorioFlag
 		var err error
 		db, err = sql.Open("sqlite", dbPath)
 		if err != nil {
@@ -86,7 +89,7 @@ func main() {
 			log.Fatalf("migraciones: %v", err)
 		}
 	default:
-		log.Fatalf("--proveedor inválido: %s (obchile | sqlite)", proveedor)
+		log.Fatalf("--proveedor inválido: %s (compuesto | sqlite | obchile)", proveedor)
 	}
 
 	// Servir archivos estáticos
@@ -113,10 +116,29 @@ func main() {
 
 func nuevoAdaptador() presupuesto.ProveedorFinanciero {
 	reglas, _ := shared.CargarReglas(rutaReglas, rutaExclusiones)
-	if proveedor == "sqlite" {
+	switch proveedor {
+	case "obchile":
+		return obchile.NewAdapter(rutaJson, rutaDivisiones, reglas, rutaSueldo, rutaManuales, repoConfigs)
+	case "sqlite":
 		return sqlitepkg.NewAdapter(db, rutaDivisiones, reglas, rutaSueldo, rutaManuales, repoConfigs)
+	default: // compuesto: liquidado (sqlite) + provisorio (scrape en vivo, si existe)
+		liquidado := sqlitepkg.NewAdapter(db, rutaDivisiones, reglas, rutaSueldo, rutaManuales, repoConfigs)
+		var provisorio presupuesto.ProveedorFinanciero
+		if archivoExiste(rutaJson) {
+			provisorio = obchile.NewAdapterProvisorio(rutaJson, rutaDivisiones, reglas, repoConfigs)
+		}
+		return compuesto.NewDesdeFuentes(liquidado, provisorio)
 	}
-	return obchile.NewAdapter(rutaJson, rutaDivisiones, reglas, rutaSueldo, rutaManuales, repoConfigs)
+}
+
+// archivoExiste indica si hay un archivo legible en la ruta. Lo usa el modo
+// compuesto para decidir si hay capa provisoria (scrape) o no.
+func archivoExiste(ruta string) bool {
+	if ruta == "" {
+		return false
+	}
+	_, err := os.Stat(ruta)
+	return err == nil
 }
 
 // idsLimite devuelve el set de ids de categorías de tipo límite (gasto). El

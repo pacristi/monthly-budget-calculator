@@ -53,6 +53,35 @@ func TestCompuesto_GastosMergeaAmbasCapas(t *testing.T) {
 	}
 }
 
+func TestNewDesdeFuentes_SinProvisorioDevuelveSoloLiquidado(t *testing.T) {
+	liquidado := proveedorFake{gastos: []presupuesto.Gasto{{ID: "liq-1"}}}
+
+	// Sin fuente de scrape (provisorio nil): debe servir solo el liquidado,
+	// sin componer ni reventar.
+	prov := NewDesdeFuentes(liquidado, nil)
+	gastos, err := prov.ObtenerGastosValidos(presupuesto.PeriodoPresupuestario{})
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if len(gastos) != 1 {
+		t.Fatalf("sin provisorio esperaba 1 gasto (solo liquidado), obtuve %d", len(gastos))
+	}
+}
+
+func TestNewDesdeFuentes_ConProvisorioCompone(t *testing.T) {
+	liquidado := proveedorFake{gastos: []presupuesto.Gasto{{ID: "liq-1"}}}
+	provisorio := proveedorFake{gastos: []presupuesto.Gasto{{ID: "prov-1"}}}
+
+	prov := NewDesdeFuentes(liquidado, provisorio)
+	gastos, err := prov.ObtenerGastosValidos(presupuesto.PeriodoPresupuestario{})
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if len(gastos) != 2 {
+		t.Fatalf("con provisorio esperaba 2 gastos (compone), obtuve %d", len(gastos))
+	}
+}
+
 func TestCompuesto_MovimientosMergeaAmbasCapas(t *testing.T) {
 	liquidado := proveedorFake{movimientos: []presupuesto.Movimiento{{Descripcion: "FACTURADO"}}}
 	provisorio := proveedorFake{movimientos: []presupuesto.Movimiento{{Descripcion: "UNBILLED"}}}

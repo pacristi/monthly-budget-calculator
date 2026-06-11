@@ -20,14 +20,15 @@ help: ## Muestra esta ayuda
 start: ## Wizard: configura .env, instala deps y levanta el dashboard
 	@bash scripts/start.sh
 
-ingest: ## Trae la cartola del día desde el banco (modo simple)
+ingest: ## Trae la cartola del día y la vuelca al sqlite (idempotente)
 	@cd ingest && node scraper.js
+	@go run $(MAIN_CLI) ingestar obchile --db data/movimientos.db --json data/current.json
 
 serve: ## Levanta el dashboard web en http://localhost:8085
-	@go run $(MAIN_API) data/current.json data/divisiones.json
+	@go run $(MAIN_API) --divisiones data/divisiones.json --provisorio data/current.json
 
 run: ## Imprime el cálculo del presupuesto en consola
-	@go run $(MAIN_CLI) data/current.json data/divisiones.json
+	@go run $(MAIN_CLI) --divisiones data/divisiones.json --provisorio data/current.json
 
 test: ## Corre los tests unitarios
 	@go test ./...
