@@ -8,13 +8,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
 
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
 	legacy "github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
+	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/shared"
 	sqlitepkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/sqlite"
 )
 
@@ -32,7 +32,7 @@ func Ingestar(jsonPath, dbPath string) (int, error) {
 
 	brutos := make([]ingest.MovimientoBruto, 0, len(dtos))
 	for _, d := range dtos {
-		if esProvisorio(d.Source) {
+		if shared.EsProvisorio(d.Source) {
 			continue // provisorio: capa viva, no se persiste
 		}
 		b, err := dtoABruto(d)
@@ -54,13 +54,6 @@ func Ingestar(jsonPath, dbPath string) (int, error) {
 
 	writer := sqlitepkg.NewWriter(db, "obchile")
 	return writer.InsertarConDedup(brutos)
-}
-
-// esProvisorio identifica cargos que el banco aún puede modificar (no
-// facturados). NO se persisten: son una proyección viva que se lee directo
-// del último scrape, no un hecho liquidado.
-func esProvisorio(source string) bool {
-	return strings.Contains(strings.ToLower(source), "unbilled")
 }
 
 func dtoABruto(d legacy.MovimientoDTO) (ingest.MovimientoBruto, error) {

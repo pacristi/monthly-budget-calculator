@@ -21,6 +21,15 @@ func EsGastoIgnorable(descripcion string, exclusiones []string) bool {
 	return false
 }
 
+// EsProvisorio identifica un movimiento que el banco aún puede modificar
+// (cargo no facturado, "unbilled"). Es el límite ÚNICO entre las dos capas:
+// la ingesta excluye de la persistencia exactamente lo que esta función
+// marca true, y la lectura lo sirve en vivo. Definirlo en un solo lugar
+// garantiza que no haya ni huecos ni doble conteo entre liquidado y provisorio.
+func EsProvisorio(source string) bool {
+	return strings.Contains(strings.ToLower(source), "unbilled")
+}
+
 // LeerExclusiones lee un JSON con la lista de substrings a ignorar al
 // calcular gastos. El formato es `["fintual", "ahorro x", ...]`.
 // Tolera que el archivo no exista (retorna lista vacía).
