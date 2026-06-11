@@ -13,6 +13,32 @@ const formatCurrency = (value, isUSD = false) => {
     return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(value);
 };
 
+// ======== Modo "Ocultar valores sensibles" ========
+// Enmascara los montos en $ derivados del sueldo (tarjeta de sueldo + barras +
+// sin-asignar) para poder mostrarle la app a terceros sin revelar el ingreso.
+// Es "privacidad de hombro": el dato sigue en el estado, solo se oculta en pantalla.
+// Persiste en localStorage para que un reload no exponga los valores sin querer.
+let valoresOcultos = localStorage.getItem('valoresOcultos') === '1';
+
+const PUNTOS_OCULTO = '<span class="valor-oculto">••••••</span>';
+
+// fmtSensible devuelve el monto formateado, o puntos si el modo ocultar está activo.
+// Devuelve HTML, así que usar con innerHTML (no textContent).
+const fmtSensible = (value, isUSD = false) =>
+    valoresOcultos ? PUNTOS_OCULTO : formatCurrency(value, isUSD);
+
+const toggleValoresOcultos = () => {
+    valoresOcultos = !valoresOcultos;
+    localStorage.setItem('valoresOcultos', valoresOcultos ? '1' : '0');
+    sincronizarBotonOcultar();
+    loadBudget(); // re-render con/sin máscara (re-fetch local, barato)
+};
+
+const sincronizarBotonOcultar = () => {
+    const btn = document.getElementById('btn-ocultar');
+    if (btn) btn.textContent = valoresOcultos ? '👁 Mostrar' : '🙈 Ocultar';
+};
+
 const ensureCategorias = async () => {
     if (categoriasCache.length > 0) return categoriasCache;
     try {
@@ -68,12 +94,12 @@ const renderBars = (categorias, sinAsignar) => {
         let pie;
         if (esMeta) {
             pie = restante > 0
-                ? `te faltan ${formatCurrency(restante)}`
-                : `meta cumplida (+${formatCurrency(-restante)})`;
+                ? `te faltan ${fmtSensible(restante)}`
+                : `meta cumplida (+${fmtSensible(-restante)})`;
         } else {
             pie = restante >= 0
-                ? `te quedan ${formatCurrency(restante)}`
-                : `te pasaste ${formatCurrency(-restante)}`;
+                ? `te quedan ${fmtSensible(restante)}`
+                : `te pasaste ${fmtSensible(-restante)}`;
         }
 
         const clases = ['barra-item', esMeta ? 'barra-meta' : 'barra-limite'];
@@ -88,19 +114,19 @@ const renderBars = (categorias, sinAsignar) => {
                 <span class="barra-real">${presupuesto > 0 ? pctReal + '%' : 'sin %'}</span>
             </div>
             <div class="barra-track"><div class="barra-fill" style="width:${ancho}%"></div></div>
-            <div class="barra-foot">${formatCurrency(acumulado)} de ${formatCurrency(presupuesto)} · <strong>${pie}</strong></div>
+            <div class="barra-foot">${fmtSensible(acumulado)} de ${fmtSensible(presupuesto)} · <strong>${pie}</strong></div>
         `;
         cont.appendChild(div);
     });
 
     const sa = document.getElementById('sin-asignar');
     if (Math.abs(sinAsignar) < 1) {
-        sa.textContent = '';
+        sa.innerHTML = '';
     } else if (sinAsignar > 0) {
-        sa.textContent = `Sin asignar este mes: ${formatCurrency(sinAsignar)}`;
+        sa.innerHTML = `Sin asignar este mes: ${fmtSensible(sinAsignar)}`;
         sa.className = 'sin-asignar';
     } else {
-        sa.textContent = `Asignaste más del 100% del sueldo: ${formatCurrency(-sinAsignar)} de más`;
+        sa.innerHTML = `Asignaste más del 100% del sueldo: ${fmtSensible(-sinAsignar)} de más`;
         sa.className = 'sin-asignar sin-asignar-over';
     }
 };
@@ -121,7 +147,7 @@ const loadBudget = async () => {
         const response = await fetch(url);
         const data = await response.json();
 
-        document.getElementById('val-sueldo').textContent = formatCurrency(data.sueldo);
+        document.getElementById('val-sueldo').innerHTML = fmtSensible(data.sueldo);
         renderBars(data.categorias, data.sinAsignar);
         renderConfigWidget(data.config, mesSeleccionado);
 
@@ -849,6 +875,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnRefresh = document.getElementById('btn-refresh');
     if (btnRefresh) {
         btnRefresh.addEventListener('click', refrescar);
+    }
+
+    const btnOcultar = document.getElementById('btn-ocultar');
+    if (btnOcultar) {
+        btnOcultar.addEventListener('click', toggleValoresOcultos);
+        sincronizarBotonOcultar();
     }
 
     await ensureCategorias();

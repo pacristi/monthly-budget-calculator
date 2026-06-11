@@ -175,6 +175,23 @@ body {
     background-color: var(--accent-hover);
 }
 
+.btn-ghost {
+    background-color: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+.btn-ghost:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+/* Puntos que reemplazan un monto cuando el modo "Ocultar" está activo. */
+.valor-oculto {
+    letter-spacing: 0.15em;
+    color: var(--text-secondary);
+}
+
 .badge {
     display: inline-block;
     padding: 0.25em 0.4em;
