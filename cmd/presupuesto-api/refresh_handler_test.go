@@ -80,6 +80,26 @@ func TestRefresh_ModoSqliteScrapeaYVuelca(t *testing.T) {
 	}
 }
 
+func TestRefresh_ModoCompuestoScrapeaYVuelca(t *testing.T) {
+	restaurarSeams(t)
+	proveedor = "compuesto"
+	scrapeado := false
+	volcado := false
+	ejecutarScraper = func() error { scrapeado = true; return nil }
+	volcarASqlite = func(_, _ string) (int, error) { volcado = true; return 3, nil }
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)
+	handleRefresh(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: %d (%s)", rec.Code, rec.Body.String())
+	}
+	if !scrapeado || !volcado {
+		t.Errorf("modo compuesto debe scrapear (%v) y volcar (%v)", scrapeado, volcado)
+	}
+}
+
 func TestRefresh_ErrorDeScraperEs500(t *testing.T) {
 	restaurarSeams(t)
 	proveedor = "obchile"

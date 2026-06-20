@@ -51,7 +51,7 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	nuevos := 0
-	if proveedor == "sqlite" {
+	if proveedor == "sqlite" || proveedor == "compuesto" {
 		n, err := volcarASqlite("data/current.json", dbPath)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
