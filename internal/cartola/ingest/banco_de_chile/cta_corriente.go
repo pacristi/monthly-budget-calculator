@@ -1,4 +1,4 @@
-package xlsx
+package banco_de_chile
 
 import (
 	"fmt"
@@ -129,13 +129,18 @@ func filasAMovimientos(filas []filaCC, año int) ([]ingest.MovimientoBruto, erro
 		}
 
 		out = append(out, ingest.MovimientoBruto{
-			Banco:       "bchile",
-			Source:      "cta_corriente",
-			Fecha:       fecha,
-			Monto:       monto,
-			Descripcion: f.descripcion,
-			IsUSD:       false,
-			Cuotas:      "",
+			Banco:           "bchile",
+			Source:          "cta_corriente",
+			Fecha:           fecha,
+			Monto:           monto,
+			Descripcion:     f.descripcion,
+			Instrumento:     ingest.InstrumentoCuentaCorriente,
+			Moneda:          ingest.MonedaCLP,
+			MontoRepresenta: ingest.MontoRepresentaTotal,
+			CuotaActual:     1,
+			CuotasTotales:   1,
+			IsUSD:           false,
+			Cuotas:          "",
 			Raw: map[string]any{
 				"fecha_xls":   f.fecha,
 				"descripcion": f.descripcion,
