@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 
-	obchileingest "github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest/obchile"
+	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingesta"
 )
 
 // ejecutarScraper corre el scraper de Node (`ingest/scraper.js`), que trae la
@@ -25,7 +25,7 @@ var ejecutarScraper = func() error {
 // avanzado). Equivale al segundo paso de `make ingest-sqlite`. Variable para
 // stubbearla en tests.
 var volcarASqlite = func(jsonPath, dbPath string) (int, error) {
-	return obchileingest.Ingestar(jsonPath, dbPath)
+	return ingesta.DesdeScraper(jsonPath, dbPath)
 }
 
 // handleRefresh dispara una ingesta nueva desde el dashboard, equivalente a

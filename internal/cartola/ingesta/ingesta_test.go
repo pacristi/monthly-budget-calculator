@@ -1,4 +1,4 @@
-package obchile
+package ingesta
 
 import (
 	"database/sql"
@@ -44,25 +44,25 @@ const jsonSintetico = `{
   "accounts": [{
     "balance": 100000,
     "movements": [
-      {"date": "15-05-2026", "description": "TRASPASO A:Test", "amount": -10000, "source": "cta_corriente", "installments": ""},
-      {"date": "14-05-2026", "description": "SUELDO", "amount": 1500000, "source": "cta_corriente", "installments": ""}
+      {"date": "15-05-2026", "description": "TRASPASO A:Test", "amount": -10000, "source": "account", "installments": ""},
+      {"date": "14-05-2026", "description": "SUELDO", "amount": 1500000, "source": "account", "installments": ""}
     ]
   }],
   "creditCards": [{
     "label": "Visa",
     "movements": [
-      {"date": "13-05-2026", "description": "Starbucks", "amount": -3500, "source": "tarjeta_credito_visa", "installments": "1/3"}
+      {"date": "13-05-2026", "description": "Starbucks", "amount": -3500, "source": "credit_card_billed", "installments": "1/3"}
     ]
   }]
 }`
 
-func TestIngestar_PrimeraCarga(t *testing.T) {
+func TestDesdeScraper_PrimeraCarga(t *testing.T) {
 	jsonPath := writeTempJSON(t, jsonSintetico)
 	dbPath, db := openTempDB(t)
 
-	insertados, err := Ingestar(jsonPath, dbPath)
+	insertados, err := DesdeScraper(jsonPath, dbPath)
 	if err != nil {
-		t.Fatalf("Ingestar: %v", err)
+		t.Fatalf("DesdeScraper: %v", err)
 	}
 	if insertados != 3 {
 		t.Errorf("esperaba 3 insertados, obtuve %d", insertados)
@@ -76,10 +76,8 @@ func TestIngestar_PrimeraCarga(t *testing.T) {
 		t.Errorf("esperaba 3 filas en BD, obtuve %d", total)
 	}
 
-	// Verificar que origen es "obchile" y raw está poblado para el café
 	var origen, raw string
-	err = db.QueryRow(`SELECT origen, raw FROM movimientos
-		WHERE descripcion = 'Starbucks'`).Scan(&origen, &raw)
+	err = db.QueryRow(`SELECT origen, raw FROM movimientos WHERE descripcion = 'Starbucks'`).Scan(&origen, &raw)
 	if err != nil {
 		t.Fatalf("query starbucks: %v", err)
 	}
@@ -93,19 +91,19 @@ func TestIngestar_PrimeraCarga(t *testing.T) {
 	if rawMap["installments"] != "1/3" {
 		t.Errorf("raw.installments: esperaba '1/3', obtuve %v", rawMap["installments"])
 	}
-	if rawMap["source"] != "tarjeta_credito_visa" {
-		t.Errorf("raw.source: esperaba 'tarjeta_credito_visa', obtuve %v", rawMap["source"])
+	if rawMap["source"] != "credit_card_billed" {
+		t.Errorf("raw.source: esperaba 'credit_card_billed', obtuve %v", rawMap["source"])
 	}
 }
 
-func TestIngestar_EsIdempotente(t *testing.T) {
+func TestDesdeScraper_EsIdempotente(t *testing.T) {
 	jsonPath := writeTempJSON(t, jsonSintetico)
 	dbPath, db := openTempDB(t)
 
-	if n, err := Ingestar(jsonPath, dbPath); err != nil || n != 3 {
+	if n, err := DesdeScraper(jsonPath, dbPath); err != nil || n != 3 {
 		t.Fatalf("primera corrida: n=%d err=%v", n, err)
 	}
-	if n, err := Ingestar(jsonPath, dbPath); err != nil || n != 0 {
+	if n, err := DesdeScraper(jsonPath, dbPath); err != nil || n != 0 {
 		t.Fatalf("segunda corrida: n=%d err=%v (esperaba 0)", n, err)
 	}
 
@@ -135,15 +133,14 @@ const jsonConProvisorio = `{
   }]
 }`
 
-func TestIngestar_NoPersisteProvisorio(t *testing.T) {
+func TestDesdeScraper_NoPersisteProvisorio(t *testing.T) {
 	jsonPath := writeTempJSON(t, jsonConProvisorio)
 	dbPath, db := openTempDB(t)
 
-	insertados, err := Ingestar(jsonPath, dbPath)
+	insertados, err := DesdeScraper(jsonPath, dbPath)
 	if err != nil {
-		t.Fatalf("Ingestar: %v", err)
+		t.Fatalf("DesdeScraper: %v", err)
 	}
-	// 3 movimientos en el JSON; el unbilled no se persiste → 2.
 	if insertados != 2 {
 		t.Errorf("esperaba 2 insertados (unbilled excluido), obtuve %d", insertados)
 	}

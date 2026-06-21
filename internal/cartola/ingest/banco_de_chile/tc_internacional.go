@@ -1,4 +1,4 @@
-package xlsx
+package banco_de_chile
 
 import (
 	"fmt"
@@ -101,13 +101,18 @@ func filasTCIAMovimientos(filas []filaTCI) ([]ingest.MovimientoBruto, error) {
 		}
 
 		out = append(out, ingest.MovimientoBruto{
-			Banco:       "bchile",
-			Source:      "tc_internacional",
-			Fecha:       fecha,
-			Monto:       monto,
-			Descripcion: f.descripcion,
-			IsUSD:       true,
-			Cuotas:      "",
+			Banco:           "bchile",
+			Source:          "tc_internacional",
+			Fecha:           fecha,
+			Monto:           monto,
+			Descripcion:     f.descripcion,
+			Instrumento:     ingest.InstrumentoTarjetaCredito,
+			Moneda:          ingest.MonedaUSD,
+			MontoRepresenta: ingest.MontoRepresentaTotal,
+			CuotaActual:     1,
+			CuotasTotales:   1,
+			IsUSD:           true,
+			Cuotas:          "",
 			Raw: map[string]any{
 				"categoria":           f.categoria,
 				"fecha_xls":           f.fecha,

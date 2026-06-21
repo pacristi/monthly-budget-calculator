@@ -12,8 +12,8 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/compuesto"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
-	obchileingest "github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest/obchile"
-	xlsxpkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest/xlsx"
+	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest/banco_de_chile"
+	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingesta"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
 	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/shared"
 	sqlitepkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/sqlite"
@@ -196,7 +196,7 @@ func runIngestarObchile(args []string) {
 	jsonPath := fs.String("json", "data/current.json", "Ruta al JSON producido por el scraper")
 	fs.Parse(args)
 
-	n, err := obchileingest.Ingestar(*jsonPath, *dbPath)
+	n, err := ingesta.DesdeScraper(*jsonPath, *dbPath)
 	if err != nil {
 		log.Fatalf("ingesta obchile: %v", err)
 	}
@@ -239,35 +239,24 @@ func runIngestarXlsx(args []string) {
 		batch = append(batch, movs...)
 	}
 
-	db, err := sql.Open("sqlite", *dbPath)
-	if err != nil {
-		log.Fatalf("abriendo BD: %v", err)
-	}
-	defer db.Close()
-
-	if err := sqlitepkg.Up(db); err != nil {
-		log.Fatalf("migraciones: %v", err)
-	}
-
-	writer := sqlitepkg.NewWriter(db, "xlsx")
-	n, err := writer.InsertarConDedup(batch)
+	n, err := ingesta.Persistir(batch, *dbPath, "xlsx")
 	if err != nil {
 		log.Fatalf("insert: %v", err)
 	}
 	fmt.Printf("Ingesta xlsx: %d movimientos nuevos\n", n)
 }
 
-func elegirParserXlsx(banco, tipo string) (xlsxpkg.ParserCartolaXLSX, error) {
+func elegirParserXlsx(banco, tipo string) (banco_de_chile.ParserXLSX, error) {
 	if banco != "bchile" {
 		return nil, fmt.Errorf("banco no soportado: %s (solo 'bchile' por ahora)", banco)
 	}
 	switch tipo {
 	case "cta-corriente":
-		return xlsxpkg.NewBchileCuentaCorriente(), nil
+		return banco_de_chile.NewBchileCuentaCorriente(), nil
 	case "tc-nacional":
-		return xlsxpkg.NewBchileTCNacional(), nil
+		return banco_de_chile.NewBchileTCNacional(), nil
 	case "tc-internacional":
-		return xlsxpkg.NewBchileTCInternacional(), nil
+		return banco_de_chile.NewBchileTCInternacional(), nil
 	default:
 		return nil, fmt.Errorf("tipo no soportado en esta versión: %s (soporta cta-corriente, tc-nacional, tc-internacional)", tipo)
 	}

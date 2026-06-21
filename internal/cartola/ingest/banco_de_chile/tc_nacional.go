@@ -1,4 +1,4 @@
-package xlsx
+package banco_de_chile
 
 import (
 	"fmt"
@@ -102,14 +102,26 @@ func filasTCNAMovimientos(filas []filaTCN) ([]ingest.MovimientoBruto, error) {
 			continue
 		}
 
+		cuotaActual, cuotasTotales := parseCuotas(f.cuotas)
+		// En el xlsx cada fila trae el monto de UNA cuota, no el total.
+		representa := ingest.MontoRepresentaTotal
+		if cuotasTotales > 1 {
+			representa = ingest.MontoRepresentaCuota
+		}
+
 		out = append(out, ingest.MovimientoBruto{
-			Banco:       "bchile",
-			Source:      "tc_nacional",
-			Fecha:       fecha,
-			Monto:       monto,
-			Descripcion: f.descripcion,
-			IsUSD:       false,
-			Cuotas:      f.cuotas,
+			Banco:           "bchile",
+			Source:          "tc_nacional",
+			Fecha:           fecha,
+			Monto:           monto,
+			Descripcion:     f.descripcion,
+			Instrumento:     ingest.InstrumentoTarjetaCredito,
+			Moneda:          ingest.MonedaCLP,
+			MontoRepresenta: representa,
+			CuotaActual:     cuotaActual,
+			CuotasTotales:   cuotasTotales,
+			IsUSD:           false,
+			Cuotas:          f.cuotas,
 			Raw: map[string]any{
 				"categoria":   f.categoria,
 				"fecha_xls":   f.fecha,

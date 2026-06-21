@@ -1,4 +1,4 @@
-package xlsx
+package banco_de_chile
 
 import "github.com/extrame/xls"
 
