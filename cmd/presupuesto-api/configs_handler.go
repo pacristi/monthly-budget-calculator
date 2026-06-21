@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/config"
+	"presupuesto/internal/config"
 )
 
 // handlerListar sirve GET /api/configs.

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingesta"
+	"presupuesto/internal/cartola/ingesta"
 )
 
 // ejecutarScraper corre el scraper de Node (`ingest/scraper.js`), que trae la

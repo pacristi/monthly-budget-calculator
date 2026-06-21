@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
+	"presupuesto/internal/cartola/ingest"
 )
 
 // Writer inserta MovimientoBruto en sqlite aplicando dedup count-based
@@ -326,12 +326,12 @@ func descripcionCanonica(s string) string {
 	fields := strings.Fields(cleaned)
 
 	fillers := map[string]bool{
-		"COMPRAS": true,
+		"COMPRAS":  true,
 		"SANTIAGO": true,
-		"CL": true,
-		"INT": true,
-		"VI": true,
-		"APP": true,
+		"CL":       true,
+		"INT":      true,
+		"VI":       true,
+		"APP":      true,
 	}
 
 	var out []string

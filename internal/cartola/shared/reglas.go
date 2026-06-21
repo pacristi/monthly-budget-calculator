@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	"presupuesto/internal/presupuesto"
 )
 
 // LeerReglas lee el archivo de reglas de categorización, con formato

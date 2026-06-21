@@ -1,4 +1,4 @@
-package banco_de_chile
+package bchile
 
 import "testing"
 
@@ -97,7 +97,7 @@ func TestTCNacional_RawIncluyeCategoria(t *testing.T) {
 }
 
 func TestTCNacional_ParserMeta(t *testing.T) {
-	p := NewBchileTCNacional()
+	p := NewTCNacional()
 	if p.Banco() != "bchile" {
 		t.Errorf("banco: %s", p.Banco())
 	}

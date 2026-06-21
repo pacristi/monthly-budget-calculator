@@ -1,4 +1,4 @@
-package banco_de_chile
+package bchile
 
 import (
 	"fmt"
@@ -7,24 +7,24 @@ import (
 
 	"github.com/extrame/xls"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
+	"presupuesto/internal/cartola/ingest"
 )
 
-// BchileTCNacional parsea cartolas mensuales de la tarjeta de crédito
+// TCNacional parsea cartolas mensuales de la tarjeta de crédito
 // nacional de Banco de Chile. Las fechas vienen completas (dd/mm/yyyy),
 // los montos vienen positivos (hay que asignar signo: cargo o pago), y
 // hay filas informativas que filtrar (cuota 00/N y categoría "Información").
-type BchileTCNacional struct{}
+type TCNacional struct{}
 
-func NewBchileTCNacional() *BchileTCNacional {
-	return &BchileTCNacional{}
+func NewTCNacional() *TCNacional {
+	return &TCNacional{}
 }
 
-func (p *BchileTCNacional) Banco() string  { return "bchile" }
-func (p *BchileTCNacional) Source() string { return "tc_nacional" }
+func (p *TCNacional) Banco() string  { return "bchile" }
+func (p *TCNacional) Source() string { return "tc_nacional" }
 
 // Parsear ignora el año (las fechas vienen completas).
-func (p *BchileTCNacional) Parsear(path string, _ int) ([]ingest.MovimientoBruto, error) {
+func (p *TCNacional) Parsear(path string, _ int) ([]ingest.MovimientoBruto, error) {
 	filas, err := leerFilasTCN(path)
 	if err != nil {
 		return nil, fmt.Errorf("leyendo %s: %w", path, err)

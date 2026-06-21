@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	"presupuesto/internal/presupuesto"
 )
 
 // proveedorFake es un ProveedorFinanciero de prueba con datos prefijados.

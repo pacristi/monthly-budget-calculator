@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	"presupuesto/internal/presupuesto"
 )
 
 func TestRepoCategorias_ArchivoAusenteDevuelveGastoPorDefecto(t *testing.T) {

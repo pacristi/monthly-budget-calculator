@@ -12,13 +12,13 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/compuesto"
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/shared"
-	sqlitepkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/sqlite"
-	"github.com/pierocristi/monthly-budget-calculator/internal/config"
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
 	_ "modernc.org/sqlite"
+	"presupuesto/internal/cartola/compuesto"
+	"presupuesto/internal/cartola/obchile"
+	"presupuesto/internal/cartola/shared"
+	sqlitepkg "presupuesto/internal/cartola/sqlite"
+	"presupuesto/internal/config"
+	"presupuesto/internal/presupuesto"
 )
 
 var (

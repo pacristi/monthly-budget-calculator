@@ -1,4 +1,4 @@
-package banco_de_chile
+package bchile
 
 import (
 	"fmt"
@@ -7,10 +7,10 @@ import (
 
 	"github.com/extrame/xls"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
+	"presupuesto/internal/cartola/ingest"
 )
 
-// BchileCuentaCorriente parsea cartolas mensuales de cuenta corriente de
+// CuentaCorriente parsea cartolas mensuales de cuenta corriente de
 // Banco de Chile. El formato:
 //   - Filas 0-23: encabezado (titular, RUT, saldos, headers de cartola).
 //   - Fila ~24: headers de movimientos.
@@ -18,17 +18,17 @@ import (
 //     canal, cargo (CLP), abono (CLP), saldo.
 //
 // Como las fechas no traen año, requiere el año explícito al parsear.
-type BchileCuentaCorriente struct{}
+type CuentaCorriente struct{}
 
-func NewBchileCuentaCorriente() *BchileCuentaCorriente {
-	return &BchileCuentaCorriente{}
+func NewCuentaCorriente() *CuentaCorriente {
+	return &CuentaCorriente{}
 }
 
-func (p *BchileCuentaCorriente) Banco() string  { return "bchile" }
-func (p *BchileCuentaCorriente) Source() string { return "cta_corriente" }
+func (p *CuentaCorriente) Banco() string  { return "bchile" }
+func (p *CuentaCorriente) Source() string { return "cta_corriente" }
 
 // Parsear lee el archivo .xls en `path` y devuelve los movimientos.
-func (p *BchileCuentaCorriente) Parsear(path string, año int) ([]ingest.MovimientoBruto, error) {
+func (p *CuentaCorriente) Parsear(path string, año int) ([]ingest.MovimientoBruto, error) {
 	filas, err := leerFilasCC(path)
 	if err != nil {
 		return nil, fmt.Errorf("leyendo %s: %w", path, err)

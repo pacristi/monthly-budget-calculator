@@ -9,7 +9,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	sqlitepkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/sqlite"
+	sqlitepkg "presupuesto/internal/cartola/sqlite"
 )
 
 func writeTempJSON(t *testing.T, content string) string {

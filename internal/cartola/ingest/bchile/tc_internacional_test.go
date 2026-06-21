@@ -1,4 +1,4 @@
-package banco_de_chile
+package bchile
 
 import "testing"
 
@@ -89,7 +89,7 @@ func TestTCInternacional_RawIncluyePaisYMontoOrigen(t *testing.T) {
 }
 
 func TestTCInternacional_ParserMeta(t *testing.T) {
-	p := NewBchileTCInternacional()
+	p := NewTCInternacional()
 	if p.Banco() != "bchile" {
 		t.Errorf("banco: %s", p.Banco())
 	}

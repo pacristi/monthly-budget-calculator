@@ -10,16 +10,16 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/compuesto"
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest/banco_de_chile"
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingesta"
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/obchile"
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/shared"
-	sqlitepkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/sqlite"
-	"github.com/pierocristi/monthly-budget-calculator/internal/config"
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
 	_ "modernc.org/sqlite"
+	"presupuesto/internal/cartola/compuesto"
+	"presupuesto/internal/cartola/ingest"
+	"presupuesto/internal/cartola/ingest/bchile"
+	"presupuesto/internal/cartola/ingesta"
+	"presupuesto/internal/cartola/obchile"
+	"presupuesto/internal/cartola/shared"
+	sqlitepkg "presupuesto/internal/cartola/sqlite"
+	"presupuesto/internal/config"
+	"presupuesto/internal/presupuesto"
 )
 
 func main() {
@@ -246,17 +246,17 @@ func runIngestarXlsx(args []string) {
 	fmt.Printf("Ingesta xlsx: %d movimientos nuevos\n", n)
 }
 
-func elegirParserXlsx(banco, tipo string) (banco_de_chile.ParserXLSX, error) {
+func elegirParserXlsx(banco, tipo string) (bchile.ParserXLSX, error) {
 	if banco != "bchile" {
 		return nil, fmt.Errorf("banco no soportado: %s (solo 'bchile' por ahora)", banco)
 	}
 	switch tipo {
 	case "cta-corriente":
-		return banco_de_chile.NewBchileCuentaCorriente(), nil
+		return bchile.NewCuentaCorriente(), nil
 	case "tc-nacional":
-		return banco_de_chile.NewBchileTCNacional(), nil
+		return bchile.NewTCNacional(), nil
 	case "tc-internacional":
-		return banco_de_chile.NewBchileTCInternacional(), nil
+		return bchile.NewTCInternacional(), nil
 	default:
 		return nil, fmt.Errorf("tipo no soportado en esta versión: %s (soporta cta-corriente, tc-nacional, tc-internacional)", tipo)
 	}

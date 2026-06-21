@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
+	"presupuesto/internal/cartola/ingest"
 )
 
 func setupDB(t *testing.T) *Writer {
@@ -361,4 +361,3 @@ func TestDescripcionCanonica_Normalizacion(t *testing.T) {
 		}
 	}
 }
-

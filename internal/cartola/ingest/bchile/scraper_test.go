@@ -1,9 +1,9 @@
-package banco_de_chile
+package bchile
 
 import (
 	"testing"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
+	"presupuesto/internal/cartola/ingest"
 )
 
 func TestInstrumentoDeSource(t *testing.T) {
