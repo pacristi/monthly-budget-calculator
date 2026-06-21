@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/config"
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	"presupuesto/internal/config"
+	"presupuesto/internal/presupuesto"
 )
 
 func nuevoRepo(t *testing.T) *config.RepoJSON {

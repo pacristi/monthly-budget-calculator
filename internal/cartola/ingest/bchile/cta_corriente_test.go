@@ -1,4 +1,4 @@
-package banco_de_chile
+package bchile
 
 import "testing"
 
@@ -94,7 +94,7 @@ func TestFilasAMovimientos_RawIncluyeCamposCrudos(t *testing.T) {
 }
 
 func TestParser_BancoYSource(t *testing.T) {
-	p := NewBchileCuentaCorriente()
+	p := NewCuentaCorriente()
 	if p.Banco() != "bchile" {
 		t.Errorf("banco: %s", p.Banco())
 	}

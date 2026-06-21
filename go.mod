@@ -1,4 +1,4 @@
-module github.com/pierocristi/monthly-budget-calculator
+module presupuesto
 
 go 1.25.0
 

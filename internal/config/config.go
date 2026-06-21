@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	"presupuesto/internal/presupuesto"
 )
 
 // ConfigMensual es la representación persistida de una config: el mes desde

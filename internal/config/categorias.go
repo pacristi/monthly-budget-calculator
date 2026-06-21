@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	"presupuesto/internal/presupuesto"
 )
 
 // RepoCategorias persiste la lista global de categorías en un JSON.

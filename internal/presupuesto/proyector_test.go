@@ -111,9 +111,9 @@ func TestProyectorPresupuesto_Proyectar(t *testing.T) {
 			mesBase:            fecha(2026, time.May, 1),
 			mesesHaciaAdelante: 3,
 			want: []ProyeccionMensual{
-				{Anio: 2026, Mes: time.May, TotalComprometido: 700},   // 200 (gasto 4) + 500 (gasto 5)
-				{Anio: 2026, Mes: time.June, TotalComprometido: 700},  // 200 (gasto 4) + 500 (gasto 5)
-				{Anio: 2026, Mes: time.July, TotalComprometido: 0},    // Ya pagaron ambos
+				{Anio: 2026, Mes: time.May, TotalComprometido: 700},  // 200 (gasto 4) + 500 (gasto 5)
+				{Anio: 2026, Mes: time.June, TotalComprometido: 700}, // 200 (gasto 4) + 500 (gasto 5)
+				{Anio: 2026, Mes: time.July, TotalComprometido: 0},   // Ya pagaron ambos
 			},
 		},
 	}

@@ -17,7 +17,7 @@ func NewProyectorPresupuesto() *ProyectorPresupuesto {
 	return &ProyectorPresupuesto{}
 }
 
-// Proyectar calcula los compromisos de gastos para los próximos N meses, 
+// Proyectar calcula los compromisos de gastos para los próximos N meses,
 // a partir del mes base especificado.
 func (p *ProyectorPresupuesto) Proyectar(gastos []Gasto, mesBase time.Time, mesesHaciaAdelante int) []ProyeccionMensual {
 	var proyecciones []ProyeccionMensual

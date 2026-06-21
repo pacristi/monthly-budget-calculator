@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/shared"
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	"presupuesto/internal/cartola/shared"
+	"presupuesto/internal/presupuesto"
 )
 
 // Adapter implementa presupuesto.ProveedorFinanciero leyendo movimientos

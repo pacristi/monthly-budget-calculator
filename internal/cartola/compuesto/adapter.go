@@ -5,7 +5,7 @@
 // merge es una concatenación sin riesgo de doble conteo.
 package compuesto
 
-import "github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+import "presupuesto/internal/presupuesto"
 
 // Adapter compone una capa liquidada y una provisoria.
 type Adapter struct {

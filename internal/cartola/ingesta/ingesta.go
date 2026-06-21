@@ -9,10 +9,10 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest/banco_de_chile"
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/shared"
-	sqlitepkg "github.com/pierocristi/monthly-budget-calculator/internal/cartola/sqlite"
+	"presupuesto/internal/cartola/ingest"
+	"presupuesto/internal/cartola/ingest/bchile"
+	"presupuesto/internal/cartola/shared"
+	sqlitepkg "presupuesto/internal/cartola/sqlite"
 )
 
 // Persistir vuelca los movimientos al sqlite en `dbPath` con dedup, aplicando
@@ -35,7 +35,7 @@ func Persistir(brutos []ingest.MovimientoBruto, dbPath, origen string) (int, err
 // DesdeScraper lee el current.json de bchile y persiste el liquidado. Los
 // movimientos provisorios (unbilled) no se persisten: viven en la capa en vivo.
 func DesdeScraper(jsonPath, dbPath string) (int, error) {
-	brutos, err := banco_de_chile.LeerScraper(jsonPath)
+	brutos, err := bchile.LeerScraper(jsonPath)
 	if err != nil {
 		return 0, err
 	}

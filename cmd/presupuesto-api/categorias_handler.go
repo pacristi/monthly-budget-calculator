@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/shared"
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	"presupuesto/internal/cartola/shared"
+	"presupuesto/internal/presupuesto"
 )
 
 // handleCategorias sirve GET (lista) y POST (reemplazo total) de categorías.

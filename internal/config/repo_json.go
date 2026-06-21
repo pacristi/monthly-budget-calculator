@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	"presupuesto/internal/presupuesto"
 )
 
 // RepoJSON persiste configs mensuales en un archivo JSON.

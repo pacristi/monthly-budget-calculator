@@ -9,14 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest/banco_de_chile"
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/shared"
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	"presupuesto/internal/cartola/ingest/bchile"
+	"presupuesto/internal/cartola/shared"
+	"presupuesto/internal/presupuesto"
 )
 
 // Adapter implementa presupuesto.ProveedorFinanciero para OBCL.
 type Adapter struct {
-	client         *banco_de_chile.Client
+	client         *bchile.Client
 	overrides      []shared.Override
 	reglas         []presupuesto.Regla
 	patronesSueldo []string
@@ -32,7 +32,7 @@ func NewAdapter(rutaJson string, rutaDivisiones string, reglas []presupuesto.Reg
 	patronesSueldo, _ := shared.LeerPatronesSueldo(rutaSueldo)
 
 	return &Adapter{
-		client:         banco_de_chile.NewClient(rutaJson),
+		client:         bchile.NewClient(rutaJson),
 		overrides:      overrides,
 		reglas:         reglas,
 		patronesSueldo: patronesSueldo,
@@ -48,7 +48,7 @@ func NewAdapter(rutaJson string, rutaDivisiones string, reglas []presupuesto.Reg
 func NewAdapterProvisorio(rutaJson, rutaDivisiones string, reglas []presupuesto.Regla, resolvedor presupuesto.ResolvedorConfig) *Adapter {
 	overrides, _ := shared.LeerOverrides(rutaDivisiones)
 	return &Adapter{
-		client:       banco_de_chile.NewClient(rutaJson),
+		client:       bchile.NewClient(rutaJson),
 		overrides:    overrides,
 		reglas:       reglas,
 		resolvedor:   resolvedor,

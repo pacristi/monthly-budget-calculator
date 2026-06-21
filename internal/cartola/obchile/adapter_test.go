@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	"presupuesto/internal/presupuesto"
 )
 
 // resolvedorFake devuelve la misma config para cualquier mes.

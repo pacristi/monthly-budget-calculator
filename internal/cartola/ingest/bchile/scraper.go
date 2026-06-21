@@ -1,4 +1,4 @@
-package banco_de_chile
+package bchile
 
 import (
 	"encoding/json"
@@ -7,26 +7,26 @@ import (
 	"os"
 	"time"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
+	"presupuesto/internal/cartola/ingest"
 )
 
 const banco = "bchile"
 
-// ScraperResponse es la raíz del JSON entregado por Open Banking Chile.
-type ScraperResponse struct {
+// scraperResponse es la raíz del JSON entregado por Open Banking Chile.
+type scraperResponse struct {
 	Success     bool            `json:"success"`
 	Bank        string          `json:"bank"`
 	Movements   []MovimientoDTO `json:"movements"`
-	Accounts    []Account       `json:"accounts"`
-	CreditCards []CreditCard    `json:"creditCards"`
+	Accounts    []account       `json:"accounts"`
+	CreditCards []creditCard    `json:"creditCards"`
 }
 
-type Account struct {
+type account struct {
 	Balance   float64         `json:"balance"`
 	Movements []MovimientoDTO `json:"movements"`
 }
 
-type CreditCard struct {
+type creditCard struct {
 	Label     string          `json:"label"`
 	Movements []MovimientoDTO `json:"movements"`
 }
@@ -54,7 +54,7 @@ func (c *Client) Fetch() ([]MovimientoDTO, error) {
 	if err != nil {
 		return nil, err
 	}
-	var resp ScraperResponse
+	var resp scraperResponse
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, err
 	}

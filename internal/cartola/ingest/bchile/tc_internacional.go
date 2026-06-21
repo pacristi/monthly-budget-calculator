@@ -1,4 +1,4 @@
-package banco_de_chile
+package bchile
 
 import (
 	"fmt"
@@ -7,22 +7,22 @@ import (
 
 	"github.com/extrame/xls"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
+	"presupuesto/internal/cartola/ingest"
 )
 
-// BchileTCInternacional parsea cartolas mensuales de la tarjeta de
+// TCInternacional parsea cartolas mensuales de la tarjeta de
 // crédito internacional de Banco de Chile. Los montos vienen en USD;
 // el parser marca cada movimiento con IsUSD=true.
-type BchileTCInternacional struct{}
+type TCInternacional struct{}
 
-func NewBchileTCInternacional() *BchileTCInternacional {
-	return &BchileTCInternacional{}
+func NewTCInternacional() *TCInternacional {
+	return &TCInternacional{}
 }
 
-func (p *BchileTCInternacional) Banco() string  { return "bchile" }
-func (p *BchileTCInternacional) Source() string { return "tc_internacional" }
+func (p *TCInternacional) Banco() string  { return "bchile" }
+func (p *TCInternacional) Source() string { return "tc_internacional" }
 
-func (p *BchileTCInternacional) Parsear(path string, _ int) ([]ingest.MovimientoBruto, error) {
+func (p *TCInternacional) Parsear(path string, _ int) ([]ingest.MovimientoBruto, error) {
 	filas, err := leerFilasTCI(path)
 	if err != nil {
 		return nil, fmt.Errorf("leyendo %s: %w", path, err)

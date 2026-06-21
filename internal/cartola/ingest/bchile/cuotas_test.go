@@ -1,4 +1,4 @@
-package banco_de_chile
+package bchile
 
 import "testing"
 

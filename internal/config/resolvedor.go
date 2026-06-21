@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/pierocristi/monthly-budget-calculator/internal/presupuesto"
+	"presupuesto/internal/presupuesto"
 )
 
 // ResolverParaMes encuentra la config aplicable para el mes dado, usando carry-forward:

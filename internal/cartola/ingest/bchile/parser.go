@@ -1,8 +1,8 @@
-// Package banco_de_chile contiene los parsers de bchile (cartolas xls y JSON
+// Package bchile contiene los parsers de bchile (cartolas xls y JSON
 // del scraper), todos produciendo el DTO canónico ingest.MovimientoBruto.
-package banco_de_chile
+package bchile
 
-import "github.com/pierocristi/monthly-budget-calculator/internal/cartola/ingest"
+import "presupuesto/internal/cartola/ingest"
 
 // ParserXLSX abstrae la lectura de un archivo .xls de un banco
 // específico para un tipo de cuenta específico. Cada combinación
