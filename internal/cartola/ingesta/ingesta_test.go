@@ -3,12 +3,14 @@ package ingesta
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	_ "modernc.org/sqlite"
 
+	"presupuesto/internal/cartola/ingest"
 	sqlitepkg "presupuesto/internal/cartola/sqlite"
 )
 
@@ -56,6 +58,50 @@ const jsonSintetico = `{
   }]
 }`
 
+func TestPersistir_DelegaEnRepositorio(t *testing.T) {
+	repo := &fakeRepoMovimientos{insertados: 7}
+	batch := []ingest.MovimientoBruto{{Banco: "bchile", Descripcion: "Cafe"}}
+
+	insertados, err := Persistir(batch, repo)
+	if err != nil {
+		t.Fatalf("Persistir: %v", err)
+	}
+	if insertados != 7 {
+		t.Fatalf("insertados: esperaba 7, obtuve %d", insertados)
+	}
+	if len(repo.recibidos) != 1 || repo.recibidos[0].Descripcion != "Cafe" {
+		t.Fatalf("repo recibió %+v", repo.recibidos)
+	}
+}
+
+func TestPersistir_PropagaErrorDelRepositorio(t *testing.T) {
+	esperado := errors.New("repo caido")
+	repo := &fakeRepoMovimientos{err: esperado}
+
+	_, err := Persistir([]ingest.MovimientoBruto{{Banco: "bchile"}}, repo)
+	if !errors.Is(err, esperado) {
+		t.Fatalf("error: esperaba %v, obtuve %v", esperado, err)
+	}
+}
+
+func TestDesdeScraper_DelegaSoloMovimientosLiquidados(t *testing.T) {
+	jsonPath := writeTempJSON(t, jsonConProvisorio)
+	repo := &fakeRepoMovimientos{}
+
+	_, err := DesdeScraper(jsonPath, repo)
+	if err != nil {
+		t.Fatalf("DesdeScraper: %v", err)
+	}
+	if len(repo.recibidos) != 2 {
+		t.Fatalf("movimientos recibidos: esperaba 2, obtuve %d", len(repo.recibidos))
+	}
+	for _, m := range repo.recibidos {
+		if m.Source == "credit_card_unbilled" {
+			t.Fatalf("no debió delegar provisorios: %+v", repo.recibidos)
+		}
+	}
+}
+
 func TestDesdeScraper_PrimeraCarga(t *testing.T) {
 	jsonPath := writeTempJSON(t, jsonSintetico)
 	_, db := openTempDB(t)
@@ -95,6 +141,17 @@ func TestDesdeScraper_PrimeraCarga(t *testing.T) {
 	if rawMap["source"] != "credit_card_billed" {
 		t.Errorf("raw.source: esperaba 'credit_card_billed', obtuve %v", rawMap["source"])
 	}
+}
+
+type fakeRepoMovimientos struct {
+	recibidos  []ingest.MovimientoBruto
+	insertados int
+	err        error
+}
+
+func (r *fakeRepoMovimientos) GuardarMovimientos(movs []ingest.MovimientoBruto) (int, error) {
+	r.recibidos = append([]ingest.MovimientoBruto(nil), movs...)
+	return r.insertados, r.err
 }
 
 func TestDesdeScraper_EsIdempotente(t *testing.T) {

@@ -11,11 +11,11 @@ import (
 func restaurarSeams(t *testing.T) {
 	t.Helper()
 	scraperOrig := ejecutarScraper
-	volcarOrig := volcarASqlite
+	volcarOrig := volcarMovimientos
 	proveedorOrig := proveedor
 	t.Cleanup(func() {
 		ejecutarScraper = scraperOrig
-		volcarASqlite = volcarOrig
+		volcarMovimientos = volcarOrig
 		proveedor = proveedorOrig
 	})
 }
@@ -43,7 +43,7 @@ func TestRefresh_ModoSimpleSoloScrapea(t *testing.T) {
 	scrapeado := false
 	volcado := false
 	ejecutarScraper = func() error { scrapeado = true; return nil }
-	volcarASqlite = func(_, _ string) (int, error) { volcado = true; return 0, nil }
+	volcarMovimientos = func(_ string) (int, error) { volcado = true; return 0, nil }
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)
@@ -66,7 +66,7 @@ func TestRefresh_ModoSqliteScrapeaYVuelca(t *testing.T) {
 	scrapeado := false
 	volcado := false
 	ejecutarScraper = func() error { scrapeado = true; return nil }
-	volcarASqlite = func(_, _ string) (int, error) { volcado = true; return 3, nil }
+	volcarMovimientos = func(_ string) (int, error) { volcado = true; return 3, nil }
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)
@@ -86,7 +86,7 @@ func TestRefresh_ModoCompuestoScrapeaYVuelca(t *testing.T) {
 	scrapeado := false
 	volcado := false
 	ejecutarScraper = func() error { scrapeado = true; return nil }
-	volcarASqlite = func(_, _ string) (int, error) { volcado = true; return 3, nil }
+	volcarMovimientos = func(_ string) (int, error) { volcado = true; return 3, nil }
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)

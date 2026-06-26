@@ -9,15 +9,14 @@ import (
 	"presupuesto/internal/cartola/shared"
 )
 
-// RepositorioMovimientos persiste movimientos canónicos con la política de
-// deduplicación propia del repositorio concreto.
+// RepositorioMovimientos persiste movimientos canónicos.
 type RepositorioMovimientos interface {
-	InsertarConDedup([]ingest.MovimientoBruto) (int, error)
+	GuardarMovimientos([]ingest.MovimientoBruto) (int, error)
 }
 
 // Persistir vuelca los movimientos al repositorio recibido.
 func Persistir(brutos []ingest.MovimientoBruto, repo RepositorioMovimientos) (int, error) {
-	return repo.InsertarConDedup(brutos)
+	return repo.GuardarMovimientos(brutos)
 }
 
 // DesdeScraper lee el current.json de bchile y persiste el liquidado. Los
