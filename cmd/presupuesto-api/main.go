@@ -14,6 +14,7 @@ import (
 	"github.com/joho/godotenv"
 	_ "modernc.org/sqlite"
 	"presupuesto/internal/cartola/compuesto"
+	"presupuesto/internal/cartola/ingesta"
 	"presupuesto/internal/cartola/obchile"
 	"presupuesto/internal/cartola/shared"
 	sqlitepkg "presupuesto/internal/cartola/sqlite"
@@ -34,6 +35,7 @@ var (
 	dbPath          string
 	rutaManuales    string
 	db              *sql.DB
+	repoMovimientos ingesta.RepositorioMovimientos
 )
 
 func main() {
@@ -88,6 +90,7 @@ func main() {
 		if err := sqlitepkg.Up(db); err != nil {
 			log.Fatalf("migraciones: %v", err)
 		}
+		repoMovimientos = sqlitepkg.NewWriter(db, "obchile")
 	default:
 		log.Fatalf("--proveedor inválido: %s (compuesto | sqlite | obchile)", proveedor)
 	}

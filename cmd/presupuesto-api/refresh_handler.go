@@ -21,11 +21,10 @@ var ejecutarScraper = func() error {
 	return nil
 }
 
-// volcarASqlite ingesta el current.json recién scrapeado al sqlite (modo
-// avanzado). Equivale al segundo paso de `make ingest-sqlite`. Variable para
-// stubbearla en tests.
-var volcarASqlite = func(jsonPath, dbPath string) (int, error) {
-	return ingesta.DesdeScraper(jsonPath, dbPath)
+// volcarMovimientos ingesta el current.json recién scrapeado al repositorio de
+// movimientos configurado. Variable para stubbearla en tests.
+var volcarMovimientos = func(jsonPath string) (int, error) {
+	return ingesta.DesdeScraper(jsonPath, repoMovimientos)
 }
 
 // handleRefresh dispara una ingesta nueva desde el dashboard, equivalente a
@@ -52,7 +51,7 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 
 	nuevos := 0
 	if proveedor == "sqlite" || proveedor == "compuesto" {
-		n, err := volcarASqlite("data/current.json", dbPath)
+		n, err := volcarMovimientos("data/current.json")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

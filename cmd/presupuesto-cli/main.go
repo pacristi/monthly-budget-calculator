@@ -196,7 +196,10 @@ func runIngestarObchile(args []string) {
 	jsonPath := fs.String("json", "data/current.json", "Ruta al JSON producido por el scraper")
 	fs.Parse(args)
 
-	n, err := ingesta.DesdeScraper(*jsonPath, *dbPath)
+	repo, cerrar := abrirRepoMovimientos(*dbPath, "obchile")
+	defer cerrar()
+
+	n, err := ingesta.DesdeScraper(*jsonPath, repo)
 	if err != nil {
 		log.Fatalf("ingesta obchile: %v", err)
 	}
@@ -239,7 +242,10 @@ func runIngestarXlsx(args []string) {
 		batch = append(batch, movs...)
 	}
 
-	n, err := ingesta.Persistir(batch, *dbPath, "xlsx")
+	repo, cerrar := abrirRepoMovimientos(*dbPath, "xlsx")
+	defer cerrar()
+
+	n, err := ingesta.Persistir(batch, repo)
 	if err != nil {
 		log.Fatalf("insert: %v", err)
 	}
@@ -260,6 +266,18 @@ func elegirParserXlsx(banco, tipo string) (bchile.ParserXLSX, error) {
 	default:
 		return nil, fmt.Errorf("tipo no soportado en esta versión: %s (soporta cta-corriente, tc-nacional, tc-internacional)", tipo)
 	}
+}
+
+func abrirRepoMovimientos(dbPath, origen string) (*sqlitepkg.Writer, func()) {
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		log.Fatalf("abriendo BD: %v", err)
+	}
+	if err := sqlitepkg.Up(db); err != nil {
+		db.Close()
+		log.Fatalf("migraciones: %v", err)
+	}
+	return sqlitepkg.NewWriter(db, origen), func() { db.Close() }
 }
 
 func runSqliteSubcommand(args []string) {

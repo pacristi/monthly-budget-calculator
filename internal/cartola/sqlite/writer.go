@@ -28,6 +28,11 @@ func NewWriter(db *sql.DB, origen string) *Writer {
 	return &Writer{db: db, origen: origen}
 }
 
+// GuardarMovimientos persiste movimientos canónicos en sqlite.
+func (w *Writer) GuardarMovimientos(batch []ingest.MovimientoBruto) (int, error) {
+	return w.InsertarConDedup(batch)
+}
+
 // InsertarConDedup inserta los movimientos del batch evitando duplicaciones.
 //
 // Trabaja en dos pasadas:
