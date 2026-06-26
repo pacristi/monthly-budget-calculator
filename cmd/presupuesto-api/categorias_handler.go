@@ -37,6 +37,58 @@ func handleCategorias(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func handleMovimientoNombre(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if rutaDivisiones == "" {
+		http.Error(w, "No divisions file configured", http.StatusBadRequest)
+		return
+	}
+
+	var req shared.Override
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	overrides, err := shared.LeerOverrides(rutaDivisiones)
+	if err != nil {
+		overrides = []shared.Override{}
+	}
+
+	found := false
+	for i := range overrides {
+		if overrides[i].Fecha == req.Fecha && overrides[i].MontoOriginal == req.MontoOriginal && overrides[i].Descripcion == req.Descripcion {
+			overrides[i].Nombre = req.Nombre
+			found = true
+			break
+		}
+	}
+	if !found {
+		overrides = append(overrides, shared.Override{
+			Fecha:         req.Fecha,
+			MontoOriginal: req.MontoOriginal,
+			Descripcion:   req.Descripcion,
+			Nombre:        req.Nombre,
+		})
+	}
+
+	data, err := json.MarshalIndent(overrides, "", "    ")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := os.WriteFile(rutaDivisiones, data, 0644); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
 // handleReglas sirve GET (reglas efectivas, migrando exclusiones legacy) y
 // POST (reemplazo total) de reglas de categorización.
 func handleReglas(w http.ResponseWriter, r *http.Request) {

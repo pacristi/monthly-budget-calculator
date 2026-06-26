@@ -18,6 +18,7 @@ type Override struct {
 	Descripcion   string   `json:"descripcion"`
 	MiParte       *float64 `json:"miParte,omitempty"`
 	Categoria     string   `json:"categoria,omitempty"`
+	Nombre        string   `json:"nombre,omitempty"`
 }
 
 // LeerOverrides lee el archivo de reglas locales, si existe.
@@ -70,6 +71,18 @@ func CategoriaOverride(fechaISO string, montoOriginal float64, descripcion strin
 		}
 		if o.Fecha == fechaISO && o.MontoOriginal == montoOriginal && o.Descripcion == descripcion {
 			return o.Categoria
+		}
+	}
+	return ""
+}
+
+func NombreOverride(fechaISO string, montoOriginal float64, descripcion string, overrides []Override) string {
+	for _, o := range overrides {
+		if o.Descripcion == "" {
+			continue
+		}
+		if o.Fecha == fechaISO && o.MontoOriginal == montoOriginal && o.Descripcion == descripcion {
+			return o.Nombre
 		}
 	}
 	return ""
