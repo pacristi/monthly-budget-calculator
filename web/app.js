@@ -13,6 +13,15 @@ const formatCurrency = (value, isUSD = false) => {
     return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(value);
 };
 
+const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const jsArg = (value) => JSON.stringify(String(value ?? '')).replace(/</g, '\\u003c');
+
 // ======== Modo "Ocultar valores sensibles" ========
 // Enmascara los montos en $ derivados del sueldo (tarjeta de sueldo + barras +
 // sin-asignar) para poder mostrarle la app a terceros sin revelar el ingreso.
@@ -161,7 +170,7 @@ const loadBudget = async () => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${formatFecha(g.fecha)}</td>
-                    <td>${g.descripcion} <span class="cat-chip">${nombreCategoria(g.categoriaId)}</span></td>
+                    <td>${escapeHtml(g.descripcion)} <span class="cat-chip">${nombreCategoria(g.categoriaId)}</span></td>
                     <td>${formatCurrency(g.carga)}</td>
                     <td>${g.cuotas > 1 ? g.cuotas : '1'}</td>
                 `;
@@ -180,8 +189,8 @@ const buildCategoriaSelect = (m) => {
         `<option value="${c.id}" ${c.id === m.categoriaId ? 'selected' : ''}>${c.nombre}</option>`
     );
     opciones.push(`<option value="${IGNORAR}" ${m.categoriaId === IGNORAR ? 'selected' : ''}>— ignorar —</option>`);
-    const descEsc = m.descripcion.replace(/'/g, "\\'");
-    return `<select class="cat-select" onchange="setMovimientoCategoria('${m.fecha}', ${m.monto}, '${descEsc}', this.value)">${opciones.join('')}</select>`;
+    const descripcionOriginal = m.descripcionOriginal || m.descripcion;
+    return `<select class="cat-select" onchange="setMovimientoCategoria(${jsArg(m.fecha)}, ${m.monto}, ${jsArg(descripcionOriginal)}, this.value)">${opciones.join('')}</select>`;
 };
 
 window.setMovimientoCategoria = async (fecha, monto, descripcion, categoria) => {
@@ -197,6 +206,33 @@ window.setMovimientoCategoria = async (fecha, monto, descripcion, categoria) => 
         console.error('Error asignando categoría:', e);
         alert('Error al asignar categoría (¿configuraste un archivo de divisiones?)');
     }
+};
+
+window.setMovimientoNombre = async (fecha, monto, descripcion, nombre) => {
+    try {
+        const res = await fetch('/api/movimientos/nombre', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fecha, montoOriginal: monto, descripcion, nombre: nombre.trim() })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        loadBudget();
+        loadMovements();
+    } catch (e) {
+        console.error('Error renombrando movimiento:', e);
+        alert('Error al cambiar el nombre del movimiento');
+    }
+};
+
+const buildNombreInput = (m) => {
+    const descripcionOriginal = m.descripcionOriginal || m.descripcion;
+    const title = descripcionOriginal !== m.descripcion ? ` title="Original: ${escapeHtml(descripcionOriginal)}"` : '';
+    return `
+        <div class="movement-name"${title}>
+            <input class="movement-name-input" type="text" value="${escapeHtml(m.descripcion)}" aria-label="Nombre del movimiento" onkeydown="if(event.key === 'Enter') this.blur()" onchange="setMovimientoNombre(${jsArg(m.fecha)}, ${m.monto}, ${jsArg(descripcionOriginal)}, this.value)">
+            ${descripcionOriginal !== m.descripcion ? `<span class="movement-original">Original: ${escapeHtml(descripcionOriginal)}</span>` : ''}
+        </div>
+    `;
 };
 
 // Fetch raw movements and render them
@@ -218,18 +254,18 @@ const loadMovements = async () => {
                 if (m.miParte !== undefined && m.miParte !== null && m.miParte !== m.monto) {
                     badge = `<span class="badge">mi parte: ${formatCurrency(Math.abs(m.miParte), m.isUsd)}</span>`;
                 }
-                const descEsc = m.descripcion.replace(/'/g, "\\'");
+                const descripcionOriginal = m.descripcionOriginal || m.descripcion;
                 const miParteArg = m.miParte !== undefined && m.miParte !== null ? m.miParte : 'null';
                 tr.innerHTML = `
                     <td>${formatFecha(m.fecha)}</td>
-                    <td>${m.descripcion} ${badge}</td>
+                    <td>${buildNombreInput(m)} ${badge}</td>
                     <td>${formatCurrency(m.monto, m.isUsd)}</td>
                     <td>${buildCategoriaSelect(m)}</td>
                     <td>
-                        <button class="btn btn-primary btn-sm" onclick="openDivideModal('${m.fecha}', '${descEsc}', ${m.monto}, ${m.isUsd || false}, ${miParteArg})">
+                        <button class="btn btn-primary btn-sm" onclick="openDivideModal(${jsArg(m.fecha)}, ${jsArg(descripcionOriginal)}, ${m.monto}, ${m.isUsd || false}, ${miParteArg})">
                             Mi parte
                         </button>
-                        <button class="btn btn-secondary btn-sm" onclick="ignorarGasto('${m.fecha}', '${descEsc}', ${m.monto})" title="Marca este gasto como no contable (mi parte = 0)">
+                        <button class="btn btn-secondary btn-sm" onclick="ignorarGasto(${jsArg(m.fecha)}, ${jsArg(descripcionOriginal)}, ${m.monto})" title="Marca este gasto como no contable (mi parte = 0)">
                             No contar
                         </button>
                     </td>
