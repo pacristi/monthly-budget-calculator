@@ -7,6 +7,7 @@ import (
 	"os/exec"
 
 	"presupuesto/internal/cartola/ingesta"
+	sqlitepkg "presupuesto/internal/cartola/sqlite"
 )
 
 // ejecutarScraper corre el scraper de Node (`ingest/scraper.js`), que trae la
@@ -25,7 +26,8 @@ var ejecutarScraper = func() error {
 // avanzado). Equivale al segundo paso de `make ingest-sqlite`. Variable para
 // stubbearla en tests.
 var volcarASqlite = func(jsonPath, dbPath string) (int, error) {
-	return ingesta.DesdeScraper(jsonPath, dbPath)
+	repo := sqlitepkg.NewWriter(db, "obchile")
+	return ingesta.DesdeScraper(jsonPath, repo)
 }
 
 // handleRefresh dispara una ingesta nueva desde el dashboard, equivalente a

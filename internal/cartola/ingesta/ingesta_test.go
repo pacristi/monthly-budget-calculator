@@ -58,9 +58,10 @@ const jsonSintetico = `{
 
 func TestDesdeScraper_PrimeraCarga(t *testing.T) {
 	jsonPath := writeTempJSON(t, jsonSintetico)
-	dbPath, db := openTempDB(t)
+	_, db := openTempDB(t)
+	repo := sqlitepkg.NewWriter(db, "obchile")
 
-	insertados, err := DesdeScraper(jsonPath, dbPath)
+	insertados, err := DesdeScraper(jsonPath, repo)
 	if err != nil {
 		t.Fatalf("DesdeScraper: %v", err)
 	}
@@ -98,12 +99,13 @@ func TestDesdeScraper_PrimeraCarga(t *testing.T) {
 
 func TestDesdeScraper_EsIdempotente(t *testing.T) {
 	jsonPath := writeTempJSON(t, jsonSintetico)
-	dbPath, db := openTempDB(t)
+	_, db := openTempDB(t)
+	repo := sqlitepkg.NewWriter(db, "obchile")
 
-	if n, err := DesdeScraper(jsonPath, dbPath); err != nil || n != 3 {
+	if n, err := DesdeScraper(jsonPath, repo); err != nil || n != 3 {
 		t.Fatalf("primera corrida: n=%d err=%v", n, err)
 	}
-	if n, err := DesdeScraper(jsonPath, dbPath); err != nil || n != 0 {
+	if n, err := DesdeScraper(jsonPath, repo); err != nil || n != 0 {
 		t.Fatalf("segunda corrida: n=%d err=%v (esperaba 0)", n, err)
 	}
 
@@ -135,9 +137,10 @@ const jsonConProvisorio = `{
 
 func TestDesdeScraper_NoPersisteProvisorio(t *testing.T) {
 	jsonPath := writeTempJSON(t, jsonConProvisorio)
-	dbPath, db := openTempDB(t)
+	_, db := openTempDB(t)
+	repo := sqlitepkg.NewWriter(db, "obchile")
 
-	insertados, err := DesdeScraper(jsonPath, dbPath)
+	insertados, err := DesdeScraper(jsonPath, repo)
 	if err != nil {
 		t.Fatalf("DesdeScraper: %v", err)
 	}
