@@ -1,45 +1,27 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"
-	_ "modernc.org/sqlite"
 	"presupuesto/internal/ajustes"
-	"presupuesto/internal/cartola/compuesto"
+	"presupuesto/internal/app/bootstrap"
 	"presupuesto/internal/cartola/fuentes"
-	"presupuesto/internal/cartola/ingesta"
-	"presupuesto/internal/cartola/obchile"
 	"presupuesto/internal/cartola/refresh"
-	sqlitepkg "presupuesto/internal/cartola/sqlite"
-	"presupuesto/internal/config"
 	"presupuesto/internal/presupuesto"
 )
 
-var (
-	rutaJson         string
-	scrapeOutputPath string
-	rutaDivisiones   string
-	rutaExclusiones  string
-	rutaReglas       string
-	rutaCategorias   string
-	rutaSueldo       string
-	repoConfigs      *config.RepoJSON
-	repoCategorias   *config.RepoCategorias
-	proveedor        string
-	dbPath           string
-	rutaManuales     string
-	db               *sql.DB
-	repoMovimientos  ingesta.RepositorioMovimientos
-)
+type apiDeps struct {
+	app       *bootstrap.App
+	refresh   refreshUseCase
+	adaptador presupuesto.ProveedorFinanciero
+}
 
 func main() {
 	_ = godotenv.Load()
@@ -57,54 +39,46 @@ func main() {
 	manualesFlag := flag.String("manuales", "data/manuales.json", "Ruta al JSON de gastos manuales")
 	flag.Parse()
 
-	proveedor = *proveedorFlag
-	dbPath = *dbPathFlag
-	rutaExclusiones = *exclusionesFlag
-	rutaReglas = *reglasFlag
-	rutaCategorias = *categoriasFlag
-	rutaSueldo = *sueldoFlag
-	rutaManuales = *manualesFlag
-	scrapeOutputPath = *provisorioFlag
-	if scrapeOutputPath == "" {
-		scrapeOutputPath = "data/current.json"
-	}
-
-	repoConfigs = config.NewRepoJSON(*rutaConfigsFlag)
-	repoCategorias = config.NewRepoCategorias(rutaCategorias)
-	if err := config.EnsureSeed(repoConfigs, config.SeedPorDefecto(time.Now())); err != nil {
-		log.Fatalf("inicializando configs: %v", err)
-	}
-
-	switch proveedor {
-	case "obchile":
+	legacyJSONPath := ""
+	divisionesPath := *divisionesFlag
+	if *proveedorFlag == "obchile" {
 		args := flag.Args()
 		if len(args) < 1 {
 			log.Fatalf("Uso: presupuesto-api --proveedor obchile [--configs <ruta>] <ruta_archivo_json> [ruta_archivo_divisiones]")
 		}
-		rutaJson = args[0]
-		rutaDivisiones = ""
+		legacyJSONPath = args[0]
+		divisionesPath = ""
 		if len(args) > 1 {
-			rutaDivisiones = args[1]
+			divisionesPath = args[1]
 		}
-	case "sqlite", "compuesto":
-		rutaDivisiones = *divisionesFlag
-		rutaJson = *provisorioFlag
-		var err error
-		db, err = sql.Open("sqlite", dbPath)
-		if err != nil {
-			log.Fatalf("abriendo BD: %v", err)
-		}
-		if err := sqlitepkg.Up(db); err != nil {
-			log.Fatalf("migraciones: %v", err)
-		}
-		repoMovimientos = sqlitepkg.NewWriter(db, "obchile")
-	default:
-		log.Fatalf("--proveedor inválido: %s (compuesto | sqlite | obchile)", proveedor)
 	}
-	refrescarDashboard = refresh.CasoDeUso{
-		Scraper:     nodeScraper{Dir: "ingest", Script: "scraper.js", OutputPath: scrapeOutputPath},
-		Fuente:      fuentes.NuevaOpenBankingChile(scrapeOutputPath),
-		Repositorio: repoMovimientos,
+
+	app, err := bootstrap.New(bootstrap.Config{
+		Proveedor:       *proveedorFlag,
+		ConfigsPath:     *rutaConfigsFlag,
+		CategoriasPath:  *categoriasFlag,
+		DBPath:          *dbPathFlag,
+		ProvisorioPath:  *provisorioFlag,
+		DivisionesPath:  divisionesPath,
+		ExclusionesPath: *exclusionesFlag,
+		ReglasPath:      *reglasFlag,
+		SueldoPath:      *sueldoFlag,
+		ManualesPath:    *manualesFlag,
+		LegacyJSONPath:  legacyJSONPath,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer app.Close()
+
+	deps := apiDeps{
+		app:       app,
+		adaptador: app.Adaptador,
+		refresh: refresh.CasoDeUso{
+			Scraper:     nodeScraper{Dir: "ingest", Script: "scraper.js", OutputPath: app.ProvisorioPath},
+			Fuente:      fuentes.NuevaOpenBankingChile(app.ProvisorioPath),
+			Repositorio: app.RepoMovimientos,
+		},
 	}
 
 	// Servir archivos estáticos. noCache fuerza al navegador a revalidar antes de
@@ -115,18 +89,18 @@ func main() {
 	http.Handle("/", noCache(fs))
 
 	// API endpoints
-	http.HandleFunc("/api/budget", handleBudget)
-	http.HandleFunc("/api/projections", handleProjections)
-	http.HandleFunc("/api/movements", handleMovements)
-	http.HandleFunc("/api/divisions", handleDivisions)
-	http.HandleFunc("/api/configs", handlerListar(repoConfigs))
-	http.HandleFunc("/api/configs/", handlerSubconfigs(repoConfigs))
-	http.HandleFunc("/api/exclusiones", handleListaStrings(&rutaExclusiones))
-	http.HandleFunc("/api/sueldo", handleListaStrings(&rutaSueldo))
-	http.HandleFunc("/api/categorias", handleCategorias)
-	http.HandleFunc("/api/reglas", handleReglas)
-	http.HandleFunc("/api/movimientos/categoria", handleMovimientoCategoria)
-	http.HandleFunc("/api/refresh", handleRefresh)
+	http.HandleFunc("/api/budget", deps.handleBudget)
+	http.HandleFunc("/api/projections", deps.handleProjections)
+	http.HandleFunc("/api/movements", deps.handleMovements)
+	http.HandleFunc("/api/divisions", deps.handleDivisions)
+	http.HandleFunc("/api/configs", handlerListar(app.RepoConfigs))
+	http.HandleFunc("/api/configs/", handlerSubconfigs(app.RepoConfigs))
+	http.HandleFunc("/api/exclusiones", handleListaStrings(app.ExclusionesPath))
+	http.HandleFunc("/api/sueldo", handleListaStrings(app.SueldoPath))
+	http.HandleFunc("/api/categorias", deps.handleCategorias)
+	http.HandleFunc("/api/reglas", deps.handleReglas)
+	http.HandleFunc("/api/movimientos/categoria", deps.handleMovimientoCategoria)
+	http.HandleFunc("/api/refresh", deps.handleRefresh)
 
 	fmt.Printf("Servidor iniciado en http://localhost:%s\n", *port)
 	log.Fatal(http.ListenAndServe(":"+*port, nil))
@@ -139,33 +113,6 @@ func noCache(h http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-cache")
 		h.ServeHTTP(w, r)
 	})
-}
-
-func nuevoAdaptador() presupuesto.ProveedorFinanciero {
-	reglas, _ := ajustes.CargarReglas(rutaReglas, rutaExclusiones)
-	switch proveedor {
-	case "obchile":
-		return obchile.NewAdapter(rutaJson, rutaDivisiones, reglas, rutaSueldo, rutaManuales, repoConfigs)
-	case "sqlite":
-		return sqlitepkg.NewAdapter(db, rutaDivisiones, reglas, rutaSueldo, rutaManuales, repoConfigs)
-	default: // compuesto: liquidado (sqlite) + provisorio (scrape en vivo, si existe)
-		liquidado := sqlitepkg.NewAdapter(db, rutaDivisiones, reglas, rutaSueldo, rutaManuales, repoConfigs)
-		var provisorio presupuesto.ProveedorFinanciero
-		if archivoExiste(rutaJson) {
-			provisorio = obchile.NewAdapterProvisorio(rutaJson, rutaDivisiones, reglas, repoConfigs)
-		}
-		return compuesto.NewDesdeFuentes(liquidado, provisorio)
-	}
-}
-
-// archivoExiste indica si hay un archivo legible en la ruta. Lo usa el modo
-// compuesto para decidir si hay capa provisoria (scrape) o no.
-func archivoExiste(ruta string) bool {
-	if ruta == "" {
-		return false
-	}
-	_, err := os.Stat(ruta)
-	return err == nil
 }
 
 // idsLimite devuelve el set de ids de categorías de tipo límite (gasto). El
@@ -181,9 +128,9 @@ func idsLimite(cats []presupuesto.Categoria) map[string]bool {
 	return out
 }
 
-func handleBudget(w http.ResponseWriter, r *http.Request) {
-	adaptador := nuevoAdaptador()
-	calc := presupuesto.NewCalculadora(adaptador, repoConfigs)
+func (deps apiDeps) handleBudget(w http.ResponseWriter, r *http.Request) {
+	adaptador := deps.adaptador
+	calc := presupuesto.NewCalculadora(adaptador, deps.app.RepoConfigs)
 
 	ahora := time.Now()
 
@@ -203,13 +150,13 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 		Fin:    time.Date(ahora.Year(), ahora.Month()+1, 1, 0, 0, 0, 0, ahora.Location()).Add(-time.Nanosecond),
 	}
 
-	cfg, err := repoConfigs.ParaMes(periodo.Inicio)
+	cfg, err := deps.app.RepoConfigs.ParaMes(periodo.Inicio)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	categorias, err := repoCategorias.Listar()
+	categorias, err := deps.app.RepoCategorias.Listar()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -282,8 +229,8 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func handleProjections(w http.ResponseWriter, r *http.Request) {
-	adaptador := nuevoAdaptador()
+func (deps apiDeps) handleProjections(w http.ResponseWriter, r *http.Request) {
+	adaptador := deps.adaptador
 
 	mesesHaciaAdelante := 6
 	if mStr := r.URL.Query().Get("months"); mStr != "" {
@@ -306,7 +253,7 @@ func handleProjections(w http.ResponseWriter, r *http.Request) {
 
 	// La proyección de pasivos es solo de gasto (categorías límite); los
 	// aportes de meta no son deuda comprometida a futuro.
-	categorias, err := repoCategorias.Listar()
+	categorias, err := deps.app.RepoCategorias.Listar()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -344,8 +291,8 @@ func handleProjections(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
-func handleMovements(w http.ResponseWriter, r *http.Request) {
-	adaptador := nuevoAdaptador()
+func (deps apiDeps) handleMovements(w http.ResponseWriter, r *http.Request) {
+	adaptador := deps.adaptador
 	movs, err := adaptador.ObtenerMovimientos()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -379,12 +326,12 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-func handleDivisions(w http.ResponseWriter, r *http.Request) {
+func (deps apiDeps) handleDivisions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if rutaDivisiones == "" {
+	if deps.app.DivisionesPath == "" {
 		http.Error(w, "No divisions file configured", http.StatusBadRequest)
 		return
 	}
@@ -395,7 +342,7 @@ func handleDivisions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ajustes.GuardarMiParte(rutaDivisiones, req); err != nil {
+	if err := ajustes.GuardarMiParte(deps.app.DivisionesPath, req); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -405,18 +352,16 @@ func handleDivisions(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleListaStrings sirve GET y POST sobre un JSON simple de la forma
-// `["a", "b", ...]`. Lo usan los endpoints de exclusiones y patrones de
-// sueldo. La ruta se pasa por puntero porque las variables globales pueden
-// estar vacías al momento de armar el handler (defaults configurados después).
-func handleListaStrings(ruta *string) http.HandlerFunc {
+// `["a", "b", ...]`. Lo usan los endpoints de exclusiones y patrones de sueldo.
+func handleListaStrings(ruta string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if ruta == nil || *ruta == "" {
+		if ruta == "" {
 			http.Error(w, "ruta de archivo no configurada", http.StatusBadRequest)
 			return
 		}
 		switch r.Method {
 		case http.MethodGet:
-			lista, err := ajustes.LeerListaStrings(*ruta)
+			lista, err := ajustes.LeerListaStrings(ruta)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -432,7 +377,7 @@ func handleListaStrings(ruta *string) http.HandlerFunc {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			if err := ajustes.EscribirListaStrings(*ruta, lista); err != nil {
+			if err := ajustes.EscribirListaStrings(ruta, lista); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
