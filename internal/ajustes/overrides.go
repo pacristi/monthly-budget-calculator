@@ -65,9 +65,9 @@ func guardarOverride(ruta string, override Override, aplicar func(*Override, Ove
 
 	found := false
 	for i := range overrides {
-		if mismoMovimiento(overrides[i], override) {
+		if mismoMovimiento(overrides[i], override) || mismaTerna(overrides[i], override) {
 			aplicar(&overrides[i], override)
-			if overrides[i].MovimientoID == "" {
+			if override.MovimientoID != "" {
 				overrides[i].MovimientoID = override.MovimientoID
 			}
 			found = true
@@ -127,7 +127,7 @@ func buscarOverride(movimientoID string, fechaISO string, montoOriginal float64,
 	}
 
 	for _, o := range overrides {
-		if o.MovimientoID != "" || o.Descripcion == "" {
+		if o.Descripcion == "" {
 			continue
 		}
 		if o.Fecha == fechaISO && o.MontoOriginal == montoOriginal && o.Descripcion == descripcion {
@@ -138,8 +138,9 @@ func buscarOverride(movimientoID string, fechaISO string, montoOriginal float64,
 }
 
 func mismoMovimiento(a, b Override) bool {
-	if a.MovimientoID != "" || b.MovimientoID != "" {
-		return a.MovimientoID != "" && a.MovimientoID == b.MovimientoID
-	}
+	return a.MovimientoID != "" && a.MovimientoID == b.MovimientoID
+}
+
+func mismaTerna(a, b Override) bool {
 	return a.Fecha == b.Fecha && a.MontoOriginal == b.MontoOriginal && a.Descripcion == b.Descripcion
 }

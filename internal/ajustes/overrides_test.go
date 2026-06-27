@@ -16,6 +16,17 @@ func TestAplicarOverrides_PriorizaMovimientoID(t *testing.T) {
 	}
 }
 
+func TestAplicarOverrides_FallbackLegacyConMovimientoIDViejo(t *testing.T) {
+	overrides := []Override{
+		{MovimientoID: "sql-1", Fecha: "2025-05-15", MontoOriginal: -3500, Descripcion: "Starbucks café AM", MiParte: ptrF(-1750)},
+	}
+
+	got := AplicarOverrides("sql-50", -3500, "2025-05-15", "Starbucks café AM", overrides)
+	if got != -1750 {
+		t.Fatalf("esperaba fallback por terna con movimiento_id viejo, obtuve %v", got)
+	}
+}
+
 func TestAplicarOverrides_FallbackLegacyPorFechaMontoYDescripcion(t *testing.T) {
 	overrides := []Override{
 		{Fecha: "2025-05-15", MontoOriginal: -3500, Descripcion: "Starbucks café AM", MiParte: ptrF(-1750)},
@@ -141,6 +152,47 @@ func TestGuardarMiParteMatcheaPorMovimientoIDAunqueCambieDescripcion(t *testing.
 	}
 	if overrides[0].Descripcion != "Descripcion original" {
 		t.Fatalf("la descripción original debe quedar intacta, obtuvo %q", overrides[0].Descripcion)
+	}
+	if overrides[0].Categoria != "cafes" {
+		t.Fatalf("GuardarMiParte debe preservar categoría, obtuvo %q", overrides[0].Categoria)
+	}
+	if overrides[0].MiParte == nil || *overrides[0].MiParte != -1750 {
+		t.Fatalf("MiParte no guardada correctamente: %+v", overrides[0].MiParte)
+	}
+}
+
+func TestGuardarMiParteActualizaMovimientoIDViejoPorTerna(t *testing.T) {
+	ruta := t.TempDir() + "/overrides.json"
+
+	if err := GuardarCategoria(ruta, Override{
+		MovimientoID:  "sql-1",
+		Fecha:         "2025-05-15",
+		MontoOriginal: -3500,
+		Descripcion:   "Starbucks café AM",
+		Categoria:     "cafes",
+	}); err != nil {
+		t.Fatalf("guardando categoría: %v", err)
+	}
+
+	if err := GuardarMiParte(ruta, Override{
+		MovimientoID:  "sql-50",
+		Fecha:         "2025-05-15",
+		MontoOriginal: -3500,
+		Descripcion:   "Starbucks café AM",
+		MiParte:       ptrF(-1750),
+	}); err != nil {
+		t.Fatalf("guardando mi parte: %v", err)
+	}
+
+	overrides, err := LeerOverrides(ruta)
+	if err != nil {
+		t.Fatalf("leyendo overrides: %v", err)
+	}
+	if len(overrides) != 1 {
+		t.Fatalf("esperaba actualizar override existente, obtuve %d", len(overrides))
+	}
+	if overrides[0].MovimientoID != "sql-50" {
+		t.Fatalf("esperaba movimientoId actualizado a sql-50, obtuvo %q", overrides[0].MovimientoID)
 	}
 	if overrides[0].Categoria != "cafes" {
 		t.Fatalf("GuardarMiParte debe preservar categoría, obtuvo %q", overrides[0].Categoria)
