@@ -7,7 +7,6 @@ import (
 
 	"presupuesto/internal/cartola/ingest"
 	"presupuesto/internal/cartola/ingest/bchile"
-	"presupuesto/internal/cartola/ingesta"
 	"presupuesto/internal/cartola/shared"
 )
 
@@ -63,16 +62,16 @@ func (f CartolaBancoChile) LeerMovimientos() ([]ingest.MovimientoBruto, error) {
 	return batch, nil
 }
 
-func NuevaOpenBankingChile(jsonPath string) ingesta.FuenteMovimientos {
+func NuevaOpenBankingChile(jsonPath string) OpenBankingChile {
 	return OpenBankingChile{JsonPath: jsonPath}
 }
 
-func NuevaCartolaBancoChile(banco, tipo string, anio int, dir string) (ingesta.FuenteMovimientos, error) {
+func NuevaCartolaXLSX(banco, tipo string, anio int, dir string) (CartolaBancoChile, error) {
 	if banco == "" || tipo == "" || dir == "" {
-		return nil, fmt.Errorf("banco, tipo y dir son obligatorios")
+		return CartolaBancoChile{}, fmt.Errorf("banco, tipo y dir son obligatorios")
 	}
 	if _, err := parserXLSX(banco, tipo); err != nil {
-		return nil, err
+		return CartolaBancoChile{}, err
 	}
 	return CartolaBancoChile{Banco: banco, Tipo: tipo, Anio: anio, Dir: dir}, nil
 }

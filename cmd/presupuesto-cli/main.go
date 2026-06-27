@@ -217,7 +217,7 @@ func runIngestarXlsx(args []string) {
 		log.Fatalf("Uso: presupuesto-cli ingestar xlsx --banco bchile --tipo cta-corriente --año 2025 --dir <ruta>")
 	}
 
-	fuente, err := fuentes.NuevaCartolaBancoChile(*banco, *tipo, *año, *dir)
+	fuente, err := fuentes.NuevaCartolaXLSX(*banco, *tipo, *año, *dir)
 	if err != nil {
 		log.Fatalf("seleccionando fuente: %v", err)
 	}

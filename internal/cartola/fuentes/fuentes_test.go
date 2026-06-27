@@ -115,11 +115,11 @@ func TestOpenBankingChile_NoPersisteProvisorio(t *testing.T) {
 	}
 }
 
-func TestNuevaCartolaBancoChile_ValidaRegistro(t *testing.T) {
-	if _, err := NuevaCartolaBancoChile("bchile", "tc-nacional", 0, t.TempDir()); err != nil {
-		t.Fatalf("NuevaCartolaBancoChile: %v", err)
+func TestNuevaCartolaXLSX_ValidaRegistro(t *testing.T) {
+	if _, err := NuevaCartolaXLSX("bchile", "tc-nacional", 0, t.TempDir()); err != nil {
+		t.Fatalf("NuevaCartolaXLSX: %v", err)
 	}
-	if _, err := NuevaCartolaBancoChile("otro", "tc-nacional", 0, t.TempDir()); err == nil {
+	if _, err := NuevaCartolaXLSX("otro", "tc-nacional", 0, t.TempDir()); err == nil {
 		t.Fatal("esperaba error para banco no registrado")
 	}
 }
