@@ -5,34 +5,28 @@ package ingesta
 
 import (
 	"presupuesto/internal/cartola/ingest"
-	"presupuesto/internal/cartola/ingest/bchile"
-	"presupuesto/internal/cartola/shared"
 )
+
+// FuenteMovimientos produce movimientos canónicos desde una fuente concreta.
+type FuenteMovimientos interface {
+	LeerMovimientos() ([]ingest.MovimientoBruto, error)
+}
 
 // RepositorioMovimientos persiste movimientos canónicos.
 type RepositorioMovimientos interface {
 	GuardarMovimientos([]ingest.MovimientoBruto) (int, error)
 }
 
-// Persistir vuelca los movimientos al repositorio recibido.
-func Persistir(brutos []ingest.MovimientoBruto, repo RepositorioMovimientos) (int, error) {
-	return repo.GuardarMovimientos(brutos)
-}
-
-// DesdeScraper lee el current.json de bchile y persiste el liquidado. Los
-// movimientos provisorios (unbilled) no se persisten: viven en la capa en vivo.
-func DesdeScraper(jsonPath string, repo RepositorioMovimientos) (int, error) {
-	brutos, err := bchile.LeerScraper(jsonPath)
+// DesdeFuente lee una fuente de movimientos y persiste su salida canónica.
+func DesdeFuente(fuente FuenteMovimientos, repo RepositorioMovimientos) (int, error) {
+	brutos, err := fuente.LeerMovimientos()
 	if err != nil {
 		return 0, err
 	}
+	return Persistir(brutos, repo)
+}
 
-	liquidado := brutos[:0]
-	for _, b := range brutos {
-		if shared.EsProvisorio(b.Source) {
-			continue
-		}
-		liquidado = append(liquidado, b)
-	}
-	return Persistir(liquidado, repo)
+// Persistir vuelca los movimientos al repositorio recibido.
+func Persistir(brutos []ingest.MovimientoBruto, repo RepositorioMovimientos) (int, error) {
+	return repo.GuardarMovimientos(brutos)
 }
