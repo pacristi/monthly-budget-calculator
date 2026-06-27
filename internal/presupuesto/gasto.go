@@ -5,7 +5,8 @@ import "time"
 // Gasto representa una transacción.
 type Gasto struct {
 	ID               string
-	Descripcion      string  // Para identificar visualmente el gasto
+	Descripcion      string // Para identificar visualmente el gasto
+	MontoOriginal    float64
 	MontoImputado    float64 // Ya calculado: Monto Total * Porcentaje
 	Cuotas           int     // Default 1
 	FechaTransaccion time.Time

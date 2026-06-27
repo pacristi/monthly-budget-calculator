@@ -143,6 +143,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 		gastos = append(gastos, presupuesto.Gasto{
 			ID:               fmt.Sprintf("sql-%d", id),
 			Descripcion:      descripcion,
+			MontoOriginal:    monto,
 			MontoImputado:    montoImputado,
 			Cuotas:           shared.ParsearCuotas(cuotasStr),
 			FechaTransaccion: fechaTransaccion,
@@ -245,6 +246,7 @@ func (a *Adapter) leerGastosManuales() ([]presupuesto.Gasto, error) {
 		out = append(out, presupuesto.Gasto{
 			ID:               dto.ID,
 			Descripcion:      dto.Descripcion,
+			MontoOriginal:    dto.MontoTotal,
 			MontoImputado:    dto.MontoTotal,
 			Cuotas:           dto.CuotasTotales,
 			FechaTransaccion: fechaTransaccion,

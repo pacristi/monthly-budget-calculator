@@ -114,6 +114,7 @@ func main() {
 	http.HandleFunc("/api/categorias", handleCategorias)
 	http.HandleFunc("/api/reglas", handleReglas)
 	http.HandleFunc("/api/movimientos/categoria", handleMovimientoCategoria)
+	http.HandleFunc("/api/movimientos/nombre", handleMovimientoNombre)
 	http.HandleFunc("/api/refresh", handleRefresh)
 
 	fmt.Printf("Servidor iniciado en http://localhost:%s\n", *port)
@@ -210,13 +211,15 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	gastos, _ := adaptador.ObtenerGastosValidos(periodo)
+	overrides, _ := shared.LeerOverrides(rutaDivisiones)
 
 	type GastoDetalle struct {
-		Fecha       string  `json:"fecha"`
-		Descripcion string  `json:"descripcion"`
-		Carga       float64 `json:"carga"`
-		Cuotas      int     `json:"cuotas"`
-		CategoriaID string  `json:"categoriaId"`
+		Fecha               string  `json:"fecha"`
+		Descripcion         string  `json:"descripcion"`
+		DescripcionOriginal string  `json:"descripcionOriginal,omitempty"`
+		Carga               float64 `json:"carga"`
+		Cuotas              int     `json:"cuotas"`
+		CategoriaID         string  `json:"categoriaId"`
 	}
 
 	esLimite := idsLimite(categorias)
@@ -227,12 +230,20 @@ func handleBudget(w http.ResponseWriter, r *http.Request) {
 		}
 		carga := g.CalcularCargaParaPeriodo(periodo)
 		if carga > 0 {
+			fecha := g.FechaTransaccion.Format("2006-01-02")
+			descripcion := g.Descripcion
+			descripcionOriginal := ""
+			if nombre := shared.NombreOverride(fecha, g.MontoOriginal, g.Descripcion, overrides); nombre != "" {
+				descripcion = nombre
+				descripcionOriginal = g.Descripcion
+			}
 			detalles = append(detalles, GastoDetalle{
-				Fecha:       g.FechaTransaccion.Format("2006-01-02"),
-				Descripcion: g.Descripcion,
-				Carga:       carga,
-				Cuotas:      g.Cuotas,
-				CategoriaID: g.CategoriaID,
+				Fecha:               fecha,
+				Descripcion:         descripcion,
+				DescripcionOriginal: descripcionOriginal,
+				Carga:               carga,
+				Cuotas:              g.Cuotas,
+				CategoriaID:         g.CategoriaID,
 			})
 		}
 	}
@@ -341,23 +352,33 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type MovimientoRes struct {
-		Fecha       string   `json:"fecha"`
-		Descripcion string   `json:"descripcion"`
-		Monto       float64  `json:"monto"`
-		IsUSD       bool     `json:"isUsd"`
-		MiParte     *float64 `json:"miParte,omitempty"`
-		CategoriaID string   `json:"categoriaId"`
+		Fecha               string   `json:"fecha"`
+		Descripcion         string   `json:"descripcion"`
+		DescripcionOriginal string   `json:"descripcionOriginal,omitempty"`
+		Monto               float64  `json:"monto"`
+		IsUSD               bool     `json:"isUsd"`
+		MiParte             *float64 `json:"miParte,omitempty"`
+		CategoriaID         string   `json:"categoriaId"`
 	}
 
+	overrides, _ := shared.LeerOverrides(rutaDivisiones)
 	result := make([]MovimientoRes, 0, len(movs))
 	for _, m := range movs {
+		fecha := m.Fecha.Format("2006-01-02")
+		descripcion := m.Descripcion
+		descripcionOriginal := ""
+		if nombre := shared.NombreOverride(fecha, m.Monto, m.Descripcion, overrides); nombre != "" {
+			descripcion = nombre
+			descripcionOriginal = m.Descripcion
+		}
 		result = append(result, MovimientoRes{
-			Fecha:       m.Fecha.Format("2006-01-02"),
-			Descripcion: m.Descripcion,
-			Monto:       m.Monto,
-			IsUSD:       m.IsUSD,
-			MiParte:     m.MiParte,
-			CategoriaID: m.CategoriaID,
+			Fecha:               fecha,
+			Descripcion:         descripcion,
+			DescripcionOriginal: descripcionOriginal,
+			Monto:               m.Monto,
+			IsUSD:               m.IsUSD,
+			MiParte:             m.MiParte,
+			CategoriaID:         m.CategoriaID,
 		})
 	}
 

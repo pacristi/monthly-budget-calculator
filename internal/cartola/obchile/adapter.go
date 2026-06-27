@@ -128,6 +128,7 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 		gastos = append(gastos, presupuesto.Gasto{
 			ID:               fmt.Sprintf("mov-%s-%d", fechaTransaccion.Format("20060102"), i),
 			Descripcion:      mov.Descripcion,
+			MontoOriginal:    mov.Monto,
 			MontoImputado:    montoImputado,
 			Cuotas:           cuotas,
 			FechaTransaccion: fechaTransaccion,
@@ -191,6 +192,7 @@ func (a *Adapter) leerGastosManuales() ([]presupuesto.Gasto, error) {
 		gastos = append(gastos, presupuesto.Gasto{
 			ID:               dto.ID,
 			Descripcion:      dto.Descripcion,
+			MontoOriginal:    dto.MontoTotal,
 			MontoImputado:    dto.MontoTotal,
 			Cuotas:           dto.CuotasTotales,
 			FechaTransaccion: fechaTransaccion,

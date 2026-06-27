@@ -60,3 +60,19 @@ func TestAplicarOverrides_MatchPorFechaMontoYDescripcion(t *testing.T) {
 		}
 	})
 }
+
+func TestNombreOverride_MatchPorFechaMontoYDescripcion(t *testing.T) {
+	overrides := []Override{
+		{Fecha: "2025-05-15", MontoOriginal: -3500, Descripcion: "SBX123", Nombre: "Starbucks"},
+	}
+
+	got := NombreOverride("2025-05-15", -3500, "SBX123", overrides)
+	if got != "Starbucks" {
+		t.Fatalf("esperaba Starbucks, obtuve %q", got)
+	}
+
+	got = NombreOverride("2025-05-15", -3500, "OTRO", overrides)
+	if got != "" {
+		t.Fatalf("no debería matchear otra descripción, obtuve %q", got)
+	}
+}
