@@ -1,4 +1,4 @@
-package shared
+package ajustes
 
 import (
 	"os"
@@ -43,7 +43,7 @@ func TestCargarReglas_PrefiereReglasSobreExclusiones(t *testing.T) {
 
 func TestCargarReglas_MigraExclusionesSiNoHayReglas(t *testing.T) {
 	dir := t.TempDir()
-	rutaReglas := filepath.Join(dir, "reglas.json") // no existe
+	rutaReglas := filepath.Join(dir, "reglas.json")
 	rutaExclusiones := filepath.Join(dir, "exclusiones.json")
 	os.WriteFile(rutaExclusiones, []byte(`["fintual"]`), 0644)
 

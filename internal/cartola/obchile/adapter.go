@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"presupuesto/internal/ajustes"
 	"presupuesto/internal/cartola/ingest/bchile"
 	"presupuesto/internal/cartola/shared"
 	"presupuesto/internal/presupuesto"
@@ -17,7 +18,7 @@ import (
 // Adapter implementa presupuesto.ProveedorFinanciero para OBCL.
 type Adapter struct {
 	client         *bchile.Client
-	overrides      []shared.Override
+	overrides      []ajustes.Override
 	reglas         []presupuesto.Regla
 	patronesSueldo []string
 	rutaManuales   string
@@ -28,8 +29,8 @@ type Adapter struct {
 }
 
 func NewAdapter(rutaJson string, rutaDivisiones string, reglas []presupuesto.Regla, rutaSueldo string, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
-	overrides, _ := shared.LeerOverrides(rutaDivisiones)
-	patronesSueldo, _ := shared.LeerPatronesSueldo(rutaSueldo)
+	overrides, _ := ajustes.LeerOverrides(rutaDivisiones)
+	patronesSueldo, _ := ajustes.LeerListaStrings(rutaSueldo)
 
 	return &Adapter{
 		client:         bchile.NewClient(rutaJson),
@@ -46,7 +47,7 @@ func NewAdapter(rutaJson string, rutaDivisiones string, reglas []presupuesto.Reg
 // sueldo ni gastos manuales — esos son hechos de la capa liquidada y los
 // aporta el otro adapter del Compuesto (así se evita el doble conteo).
 func NewAdapterProvisorio(rutaJson, rutaDivisiones string, reglas []presupuesto.Regla, resolvedor presupuesto.ResolvedorConfig) *Adapter {
-	overrides, _ := shared.LeerOverrides(rutaDivisiones)
+	overrides, _ := ajustes.LeerOverrides(rutaDivisiones)
 	return &Adapter{
 		client:       bchile.NewClient(rutaJson),
 		overrides:    overrides,
@@ -99,7 +100,7 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 
 		// 3. Clasificar: override manual > regla por patrón > categoría default.
 		//    Los movimientos clasificados como ignorados no cuentan en ningún lado.
-		overrideCat := shared.CategoriaOverride(fechaISO, mov.Monto, mov.Descripcion, a.overrides)
+		overrideCat := ajustes.CategoriaOverride(fechaISO, mov.Monto, mov.Descripcion, a.overrides)
 		categoria := presupuesto.Clasificar(mov.Descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 		if categoria == presupuesto.Ignorado {
 			continue
@@ -111,7 +112,7 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 		}
 
 		// 4. Aplicar override (en cruda) y luego normalizar a CLP con tasa del mes
-		montoCrudo := shared.AplicarOverrides(mov.Monto, fechaISO, mov.Descripcion, a.overrides)
+		montoCrudo := ajustes.AplicarOverrides(mov.Monto, fechaISO, mov.Descripcion, a.overrides)
 		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, cfg.TasaCambioUSD))
 
 		// 4. Determinar política de corte (día de corte del mes del movimiento)
@@ -237,7 +238,7 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 			}
 		}
 
-		overrideCat := shared.CategoriaOverride(fechaISO, m.Monto, m.Descripcion, a.overrides)
+		overrideCat := ajustes.CategoriaOverride(fechaISO, m.Monto, m.Descripcion, a.overrides)
 		categoria := presupuesto.Clasificar(m.Descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 
 		isUSD := float64(int64(m.Monto)) != m.Monto

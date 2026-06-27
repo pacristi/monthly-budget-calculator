@@ -1,4 +1,4 @@
-package shared
+package ajustes
 
 import (
 	"encoding/json"
@@ -20,14 +20,16 @@ type Override struct {
 	Categoria     string   `json:"categoria,omitempty"`
 }
 
-// LeerOverrides lee el archivo de reglas locales, si existe.
+// LeerOverrides lee el archivo de ajustes locales, si existe.
 func LeerOverrides(ruta string) ([]Override, error) {
 	if ruta == "" {
 		return []Override{}, nil
 	}
 	data, err := os.ReadFile(ruta)
 	if err != nil {
-		// Toleramos que no exista el archivo de overrides
+		if os.IsNotExist(err) {
+			return []Override{}, nil
+		}
 		return []Override{}, nil
 	}
 	var overrides []Override
@@ -37,15 +39,51 @@ func LeerOverrides(ruta string) ([]Override, error) {
 	return overrides, nil
 }
 
+// GuardarMiParte inserta o actualiza el ajuste de split de un movimiento,
+// preservando su categoría manual si ya existía.
+func GuardarMiParte(ruta string, override Override) error {
+	return guardarOverride(ruta, override, func(actual *Override, nuevo Override) {
+		actual.MiParte = nuevo.MiParte
+	})
+}
+
+// GuardarCategoria inserta o actualiza la categoría manual de un movimiento,
+// preservando su split si ya existía. Categoria="" limpia la categoría manual.
+func GuardarCategoria(ruta string, override Override) error {
+	return guardarOverride(ruta, override, func(actual *Override, nuevo Override) {
+		actual.Categoria = nuevo.Categoria
+	})
+}
+
+func guardarOverride(ruta string, override Override, aplicar func(*Override, Override)) error {
+	overrides, err := LeerOverrides(ruta)
+	if err != nil {
+		overrides = []Override{}
+	}
+
+	found := false
+	for i := range overrides {
+		if overrides[i].Fecha == override.Fecha && overrides[i].MontoOriginal == override.MontoOriginal && overrides[i].Descripcion == override.Descripcion {
+			aplicar(&overrides[i], override)
+			found = true
+			break
+		}
+	}
+	if !found {
+		aplicar(&override, override)
+		overrides = append(overrides, override)
+	}
+
+	data, err := json.MarshalIndent(overrides, "", "    ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(ruta, data, 0644)
+}
+
 // AplicarOverrides devuelve el monto crudo a imputar: "mi parte" si hay un
 // override de split registrado para (fecha, montoOriginal, descripcion), o el
 // monto original tal cual. La fecha debe venir en ISO (yyyy-mm-dd).
-//
-// Un override sin MiParte (nil) — por ejemplo uno que solo asigna categoría —
-// no toca el monto. Un MiParte de 0 sí imputa 0 ("No contar").
-//
-// Si un override tiene Descripcion vacía, no matchea con nada — eso fuerza
-// que los overrides existentes se migren explícitamente.
 func AplicarOverrides(montoOriginal float64, fechaISO string, descripcion string, overrides []Override) float64 {
 	for _, o := range overrides {
 		if o.Descripcion == "" {

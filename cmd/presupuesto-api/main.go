@@ -13,12 +13,12 @@ import (
 
 	"github.com/joho/godotenv"
 	_ "modernc.org/sqlite"
+	"presupuesto/internal/ajustes"
 	"presupuesto/internal/cartola/compuesto"
 	"presupuesto/internal/cartola/fuentes"
 	"presupuesto/internal/cartola/ingesta"
 	"presupuesto/internal/cartola/obchile"
 	"presupuesto/internal/cartola/refresh"
-	"presupuesto/internal/cartola/shared"
 	sqlitepkg "presupuesto/internal/cartola/sqlite"
 	"presupuesto/internal/config"
 	"presupuesto/internal/presupuesto"
@@ -142,7 +142,7 @@ func noCache(h http.Handler) http.Handler {
 }
 
 func nuevoAdaptador() presupuesto.ProveedorFinanciero {
-	reglas, _ := shared.CargarReglas(rutaReglas, rutaExclusiones)
+	reglas, _ := ajustes.CargarReglas(rutaReglas, rutaExclusiones)
 	switch proveedor {
 	case "obchile":
 		return obchile.NewAdapter(rutaJson, rutaDivisiones, reglas, rutaSueldo, rutaManuales, repoConfigs)
@@ -387,36 +387,13 @@ func handleDivisions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req shared.Override
+	var req ajustes.Override
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	overrides, err := shared.LeerOverrides(rutaDivisiones)
-	if err != nil {
-		overrides = []shared.Override{}
-	}
-
-	found := false
-	for i, o := range overrides {
-		if o.Fecha == req.Fecha && o.MontoOriginal == req.MontoOriginal && o.Descripcion == req.Descripcion {
-			overrides[i].MiParte = req.MiParte
-			found = true
-			break
-		}
-	}
-	if !found {
-		overrides = append(overrides, req)
-	}
-
-	data, err := json.MarshalIndent(overrides, "", "    ")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err := os.WriteFile(rutaDivisiones, data, 0644); err != nil {
+	if err := ajustes.GuardarMiParte(rutaDivisiones, req); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -437,7 +414,7 @@ func handleListaStrings(ruta *string) http.HandlerFunc {
 		}
 		switch r.Method {
 		case http.MethodGet:
-			lista, err := shared.LeerExclusiones(*ruta)
+			lista, err := ajustes.LeerListaStrings(*ruta)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -453,7 +430,7 @@ func handleListaStrings(ruta *string) http.HandlerFunc {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			if err := shared.EscribirListaStrings(*ruta, lista); err != nil {
+			if err := ajustes.EscribirListaStrings(*ruta, lista); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
