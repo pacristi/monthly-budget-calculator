@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"presupuesto/internal/cartola/ingest"
+	"presupuesto/internal/cartola/obchile/facts"
 )
 
 func TestInstrumentoDeSource(t *testing.T) {
@@ -12,15 +13,18 @@ func TestInstrumentoDeSource(t *testing.T) {
 		quiero ingest.Instrumento
 	}{
 		{"account", ingest.InstrumentoCuentaCorriente},
+		{"cta_corriente", ingest.InstrumentoCuentaCorriente},
 		{"credit_card_billed", ingest.InstrumentoTarjetaCredito},
 		{"credit_card_unbilled", ingest.InstrumentoTarjetaCredito},
+		{"tc_nacional", ingest.InstrumentoTarjetaCredito},
+		{"tc_internacional", ingest.InstrumentoTarjetaCredito},
 		{"", ingest.InstrumentoDesconocido},
 		{"tarjeta_credito_visa", ingest.InstrumentoDesconocido},
 		{"algo_que_obcl_invente_manana", ingest.InstrumentoDesconocido},
 	}
 	for _, c := range casos {
-		if got := instrumentoDeSource(c.source); got != c.quiero {
-			t.Errorf("instrumentoDeSource(%q) = %q, quiero %q", c.source, got, c.quiero)
+		if got := facts.InstrumentoDeSource(c.source); got != c.quiero {
+			t.Errorf("InstrumentoDeSource(%q) = %q, quiero %q", c.source, got, c.quiero)
 		}
 	}
 }
@@ -37,8 +41,8 @@ func TestMonedaDeMonto(t *testing.T) {
 		{-2.56, ingest.MonedaUSD},
 	}
 	for _, c := range casos {
-		if got := monedaDeMonto(c.monto); got != c.quiero {
-			t.Errorf("monedaDeMonto(%v) = %q, quiero %q", c.monto, got, c.quiero)
+		if got := facts.MonedaDeMonto(c.monto); got != c.quiero {
+			t.Errorf("MonedaDeMonto(%v) = %q, quiero %q", c.monto, got, c.quiero)
 		}
 	}
 }

@@ -3,11 +3,11 @@ package bchile
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"time"
 
 	"presupuesto/internal/cartola/ingest"
+	"presupuesto/internal/cartola/obchile/facts"
 )
 
 const banco = "bchile"
@@ -101,8 +101,8 @@ func scraperABruto(d MovimientoDTO) (ingest.MovimientoBruto, error) {
 		return ingest.MovimientoBruto{}, err
 	}
 
-	moneda := monedaDeMonto(d.Monto)
-	cuotaActual, cuotasTotales := parseCuotas(d.Installments)
+	moneda := facts.MonedaDeMonto(d.Monto)
+	cuotaActual, cuotasTotales := facts.CuotasDeInstallments(d.Installments)
 
 	return ingest.MovimientoBruto{
 		Banco:       banco,
@@ -110,7 +110,7 @@ func scraperABruto(d MovimientoDTO) (ingest.MovimientoBruto, error) {
 		Fecha:       fecha,
 		Monto:       d.Monto,
 		Descripcion: d.Descripcion,
-		Instrumento: instrumentoDeSource(d.Source),
+		Instrumento: facts.InstrumentoDeSource(d.Source),
 		Moneda:      moneda,
 		// El scraper entrega el monto TOTAL de la compra, también en cuotas.
 		MontoRepresenta: ingest.MontoRepresentaTotal,
@@ -120,25 +120,6 @@ func scraperABruto(d MovimientoDTO) (ingest.MovimientoBruto, error) {
 		Cuotas:          d.Installments,
 		Raw:             raw,
 	}, nil
-}
-
-func instrumentoDeSource(source string) ingest.Instrumento {
-	switch source {
-	case "account":
-		return ingest.InstrumentoCuentaCorriente
-	case "credit_card_billed", "credit_card_unbilled":
-		return ingest.InstrumentoTarjetaCredito
-	default:
-		return ingest.InstrumentoDesconocido
-	}
-}
-
-// monedaDeMonto: el scraper no declara divisa, pero expresa CLP como enteros, así que un monto con parte decimal es USD.
-func monedaDeMonto(monto float64) ingest.Moneda {
-	if math.Trunc(monto) != monto {
-		return ingest.MonedaUSD
-	}
-	return ingest.MonedaCLP
 }
 
 func dtoAMap(d MovimientoDTO) (map[string]any, error) {
