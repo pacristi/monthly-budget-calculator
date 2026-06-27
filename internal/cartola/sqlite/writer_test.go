@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -31,6 +32,17 @@ func movCuotas(fechaISO string, monto float64, desc, cuotas string) ingest.Movim
 	m := mov(fechaISO, monto, desc)
 	m.Source = "tc_nacional"
 	m.Cuotas = cuotas
+	var actual, total int
+	if _, err := fmt.Sscanf(cuotas, "%d/%d", &actual, &total); err != nil {
+		panic(err)
+	}
+	m.CuotaActual = actual
+	m.CuotasTotales = total
+	if total > 1 {
+		m.MontoRepresenta = ingest.MontoRepresentaCuota
+	} else {
+		m.MontoRepresenta = ingest.MontoRepresentaTotal
+	}
 	return m
 }
 
@@ -238,6 +250,7 @@ func TestInsertarConDedup_DedupCrossSource_TCNacionalVsCreditCard(t *testing.T) 
 	fromXlsx := ingest.MovimientoBruto{
 		Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -20260,
 		Descripcion: "DL RAPPI CHILE RAPP LAS CONDES", Cuotas: "01/01",
+		CuotaActual: 1, CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
 	}
 	fromScraper := ingest.MovimientoBruto{
 		Banco: "bchile", Source: "credit_card_billed", Fecha: f, Monto: -20260,
@@ -287,6 +300,7 @@ func TestInsertarConDedup_CompraEnCuotas_Scraper_NoMultiplicaMonto(t *testing.T)
 	scraper := ingest.MovimientoBruto{
 		Banco: "bchile", Source: "credit_card_billed", Fecha: f,
 		Monto: -108372, Descripcion: "SKY AIRLINE", Cuotas: "1/3",
+		CuotaActual: 1, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaTotal,
 	}
 	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{scraper})
 	if err != nil {
@@ -319,11 +333,14 @@ func TestInsertarConDedup_DedupCrossSource_CompraEnCuotas(t *testing.T) {
 	f, _ := time.Parse("2006-01-02", "2025-01-07")
 	xlsxCuotas := []ingest.MovimientoBruto{
 		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
-			Descripcion: "SKY AIRLINE", Cuotas: "01/03"},
+			Descripcion: "SKY AIRLINE", Cuotas: "01/03",
+			CuotaActual: 1, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaCuota},
 		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
-			Descripcion: "SKY AIRLINE", Cuotas: "02/03"},
+			Descripcion: "SKY AIRLINE", Cuotas: "02/03",
+			CuotaActual: 2, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaCuota},
 		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
-			Descripcion: "SKY AIRLINE", Cuotas: "03/03"},
+			Descripcion: "SKY AIRLINE", Cuotas: "03/03",
+			CuotaActual: 3, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaCuota},
 	}
 	if n, _ := w.InsertarConDedup(xlsxCuotas); n != 1 {
 		t.Fatalf("inserta cuotas: esperaba 1 (total), obtuve %d", n)
