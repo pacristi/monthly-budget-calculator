@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/joho/godotenv"
 	_ "modernc.org/sqlite"
 	"presupuesto/internal/cartola/compuesto"
-	"presupuesto/internal/cartola/ingest"
-	"presupuesto/internal/cartola/ingest/bchile"
+	"presupuesto/internal/cartola/fuentes"
 	"presupuesto/internal/cartola/ingesta"
 	"presupuesto/internal/cartola/obchile"
 	"presupuesto/internal/cartola/shared"
@@ -199,7 +197,7 @@ func runIngestarObchile(args []string) {
 	repo, cerrar := abrirRepoMovimientos(*dbPath, "obchile")
 	defer cerrar()
 
-	n, err := ingesta.DesdeScraper(*jsonPath, repo)
+	n, err := ingesta.DesdeFuente(fuentes.NuevaOpenBankingChile(*jsonPath), repo)
 	if err != nil {
 		log.Fatalf("ingesta obchile: %v", err)
 	}
@@ -219,53 +217,19 @@ func runIngestarXlsx(args []string) {
 		log.Fatalf("Uso: presupuesto-cli ingestar xlsx --banco bchile --tipo cta-corriente --año 2025 --dir <ruta>")
 	}
 
-	parser, err := elegirParserXlsx(*banco, *tipo)
+	fuente, err := fuentes.NuevaCartolaXLSX(*banco, *tipo, *año, *dir)
 	if err != nil {
-		log.Fatalf("seleccionando parser: %v", err)
-	}
-
-	archivos, err := filepath.Glob(filepath.Join(*dir, "*.xls"))
-	if err != nil {
-		log.Fatalf("listando %s: %v", *dir, err)
-	}
-	if len(archivos) == 0 {
-		log.Fatalf("ningún .xls en %s", *dir)
-	}
-
-	var batch []ingest.MovimientoBruto
-	for _, a := range archivos {
-		movs, err := parser.Parsear(a, *año)
-		if err != nil {
-			log.Fatalf("parseando %s: %v", a, err)
-		}
-		fmt.Printf("  • %s: %d movimientos\n", filepath.Base(a), len(movs))
-		batch = append(batch, movs...)
+		log.Fatalf("seleccionando fuente: %v", err)
 	}
 
 	repo, cerrar := abrirRepoMovimientos(*dbPath, "xlsx")
 	defer cerrar()
 
-	n, err := ingesta.Persistir(batch, repo)
+	n, err := ingesta.DesdeFuente(fuente, repo)
 	if err != nil {
-		log.Fatalf("insert: %v", err)
+		log.Fatalf("ingesta xlsx: %v", err)
 	}
 	fmt.Printf("Ingesta xlsx: %d movimientos nuevos\n", n)
-}
-
-func elegirParserXlsx(banco, tipo string) (bchile.ParserXLSX, error) {
-	if banco != "bchile" {
-		return nil, fmt.Errorf("banco no soportado: %s (solo 'bchile' por ahora)", banco)
-	}
-	switch tipo {
-	case "cta-corriente":
-		return bchile.NewCuentaCorriente(), nil
-	case "tc-nacional":
-		return bchile.NewTCNacional(), nil
-	case "tc-internacional":
-		return bchile.NewTCInternacional(), nil
-	default:
-		return nil, fmt.Errorf("tipo no soportado en esta versión: %s (soporta cta-corriente, tc-nacional, tc-internacional)", tipo)
-	}
 }
 
 func abrirRepoMovimientos(dbPath, origen string) (*sqlitepkg.Writer, func()) {

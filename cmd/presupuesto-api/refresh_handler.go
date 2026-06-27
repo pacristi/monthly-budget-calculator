@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 
+	"presupuesto/internal/cartola/fuentes"
 	"presupuesto/internal/cartola/ingesta"
 )
 
@@ -24,7 +25,7 @@ var ejecutarScraper = func() error {
 // volcarMovimientos ingesta el current.json recién scrapeado al repositorio de
 // movimientos configurado. Variable para stubbearla en tests.
 var volcarMovimientos = func(jsonPath string) (int, error) {
-	return ingesta.DesdeScraper(jsonPath, repoMovimientos)
+	return ingesta.DesdeFuente(fuentes.NuevaOpenBankingChile(jsonPath), repoMovimientos)
 }
 
 // handleRefresh dispara una ingesta nueva desde el dashboard, equivalente a
