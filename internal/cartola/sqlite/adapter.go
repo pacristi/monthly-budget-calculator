@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"presupuesto/internal/ajustes"
 	"presupuesto/internal/cartola/shared"
 	"presupuesto/internal/presupuesto"
 )
@@ -19,7 +20,7 @@ import (
 // de un JSON puntual.
 type Adapter struct {
 	db             *sql.DB
-	overrides      []shared.Override
+	overrides      []ajustes.Override
 	reglas         []presupuesto.Regla
 	patronesSueldo []string
 	rutaManuales   string
@@ -27,8 +28,8 @@ type Adapter struct {
 }
 
 func NewAdapter(db *sql.DB, rutaDivisiones string, reglas []presupuesto.Regla, rutaSueldo, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
-	overrides, _ := shared.LeerOverrides(rutaDivisiones)
-	patronesSueldo, _ := shared.LeerPatronesSueldo(rutaSueldo)
+	overrides, _ := ajustes.LeerOverrides(rutaDivisiones)
+	patronesSueldo, _ := ajustes.LeerListaStrings(rutaSueldo)
 	return &Adapter{
 		db:             db,
 		overrides:      overrides,
@@ -119,7 +120,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 		}
 
 		// Clasificar: override manual > regla por patrón > categoría default.
-		overrideCat := shared.CategoriaOverride(fechaISO, monto, descripcion, a.overrides)
+		overrideCat := ajustes.CategoriaOverride(fechaISO, monto, descripcion, a.overrides)
 		categoria := presupuesto.Clasificar(descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 		if categoria == presupuesto.Ignorado {
 			continue
@@ -130,7 +131,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 			return nil, fmt.Errorf("resolviendo config %s: %w", fechaISO, err)
 		}
 
-		montoCrudo := shared.AplicarOverrides(monto, fechaISO, descripcion, a.overrides)
+		montoCrudo := ajustes.AplicarOverrides(monto, fechaISO, descripcion, a.overrides)
 		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, cfg.TasaCambioUSD))
 
 		tipo := presupuesto.Debito
@@ -199,7 +200,7 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 			}
 		}
 
-		overrideCat := shared.CategoriaOverride(fechaISO, monto, descripcion, a.overrides)
+		overrideCat := ajustes.CategoriaOverride(fechaISO, monto, descripcion, a.overrides)
 		categoria := presupuesto.Clasificar(descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 
 		out = append(out, presupuesto.Movimiento{

@@ -3,9 +3,8 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-	"os"
 
-	"presupuesto/internal/cartola/shared"
+	"presupuesto/internal/ajustes"
 	"presupuesto/internal/presupuesto"
 )
 
@@ -42,7 +41,7 @@ func handleCategorias(w http.ResponseWriter, r *http.Request) {
 func handleReglas(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		reglas, err := shared.CargarReglas(rutaReglas, rutaExclusiones)
+		reglas, err := ajustes.CargarReglas(rutaReglas, rutaExclusiones)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -58,7 +57,7 @@ func handleReglas(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := shared.EscribirReglas(rutaReglas, reglas); err != nil {
+		if err := ajustes.EscribirReglas(rutaReglas, reglas); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -82,40 +81,18 @@ func handleMovimientoCategoria(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req shared.Override
+	var req ajustes.Override
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	overrides, err := shared.LeerOverrides(rutaDivisiones)
-	if err != nil {
-		overrides = []shared.Override{}
-	}
-
-	found := false
-	for i := range overrides {
-		if overrides[i].Fecha == req.Fecha && overrides[i].MontoOriginal == req.MontoOriginal && overrides[i].Descripcion == req.Descripcion {
-			overrides[i].Categoria = req.Categoria // preserva MiParte existente
-			found = true
-			break
-		}
-	}
-	if !found {
-		overrides = append(overrides, shared.Override{
-			Fecha:         req.Fecha,
-			MontoOriginal: req.MontoOriginal,
-			Descripcion:   req.Descripcion,
-			Categoria:     req.Categoria,
-		})
-	}
-
-	data, err := json.MarshalIndent(overrides, "", "    ")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if err := os.WriteFile(rutaDivisiones, data, 0644); err != nil {
+	if err := ajustes.GuardarOverride(rutaDivisiones, ajustes.Override{
+		Fecha:         req.Fecha,
+		MontoOriginal: req.MontoOriginal,
+		Descripcion:   req.Descripcion,
+		Categoria:     req.Categoria,
+	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

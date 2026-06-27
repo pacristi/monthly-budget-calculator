@@ -10,11 +10,11 @@ import (
 
 	"github.com/joho/godotenv"
 	_ "modernc.org/sqlite"
+	"presupuesto/internal/ajustes"
 	"presupuesto/internal/cartola/compuesto"
 	"presupuesto/internal/cartola/fuentes"
 	"presupuesto/internal/cartola/ingesta"
 	"presupuesto/internal/cartola/obchile"
-	"presupuesto/internal/cartola/shared"
 	sqlitepkg "presupuesto/internal/cartola/sqlite"
 	"presupuesto/internal/config"
 	"presupuesto/internal/presupuesto"
@@ -47,7 +47,7 @@ func main() {
 	manualesFlag := flag.String("manuales", "data/manuales.json", "Ruta al JSON de gastos manuales")
 	flag.Parse()
 
-	reglas, _ := shared.CargarReglas(*reglasFlag, *exclusionesFlag)
+	reglas, _ := ajustes.CargarReglas(*reglasFlag, *exclusionesFlag)
 
 	fmt.Printf("Iniciando Calculadora de Presupuesto Mensual\n")
 
