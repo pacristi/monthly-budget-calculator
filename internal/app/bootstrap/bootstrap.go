@@ -35,7 +35,6 @@ type App struct {
 	RepoConfigs     *config.RepoJSON
 	RepoCategorias  *config.RepoCategorias
 	RepoMovimientos ingesta.RepositorioMovimientos
-	DB              *sql.DB
 	Adaptador       presupuesto.ProveedorFinanciero
 	DivisionesPath  string
 	ExclusionesPath string
@@ -43,6 +42,7 @@ type App struct {
 	SueldoPath      string
 	ManualesPath    string
 	ProvisorioPath  string
+	db              *sql.DB
 }
 
 func New(cfg Config) (*App, error) {
@@ -74,6 +74,9 @@ func New(cfg Config) (*App, error) {
 
 	switch cfg.Proveedor {
 	case "obchile":
+		if cfg.LegacyJSONPath == "" {
+			return nil, fmt.Errorf("ruta JSON requerida para proveedor obchile")
+		}
 		app.Adaptador = obchile.NewAdapter(cfg.LegacyJSONPath, cfg.DivisionesPath, reglas, cfg.SueldoPath, cfg.ManualesPath, repoConfigs)
 	case "sqlite", "compuesto":
 		db, err := sql.Open("sqlite", cfg.DBPath)
@@ -84,7 +87,7 @@ func New(cfg Config) (*App, error) {
 			db.Close()
 			return nil, fmt.Errorf("migraciones: %w", err)
 		}
-		app.DB = db
+		app.db = db
 		app.RepoMovimientos = sqlitepkg.NewWriter(db, "obchile")
 
 		liquidado := sqlitepkg.NewAdapter(db, cfg.DivisionesPath, reglas, cfg.SueldoPath, cfg.ManualesPath, repoConfigs)
@@ -105,10 +108,10 @@ func New(cfg Config) (*App, error) {
 }
 
 func (a *App) Close() error {
-	if a.DB == nil {
+	if a.db == nil {
 		return nil
 	}
-	return a.DB.Close()
+	return a.db.Close()
 }
 
 func (a *App) PersisteRefresh() bool {

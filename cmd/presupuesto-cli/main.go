@@ -54,7 +54,6 @@ func main() {
 			log.Fatalf("Uso: presupuesto-cli [...] --proveedor obchile <ruta_json> [ruta_divisiones]")
 		}
 		legacyJSONPath = args[0]
-		divisionesPath = ""
 		if len(args) > 1 {
 			divisionesPath = args[1]
 		}
