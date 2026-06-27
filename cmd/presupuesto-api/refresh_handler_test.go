@@ -1,29 +1,41 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
+type refreshFake struct {
+	persistirRecibido bool
+	llamado           bool
+	nuevos            int
+	err               error
+}
+
+func (f *refreshFake) Ejecutar(persistir bool) (int, error) {
+	f.llamado = true
+	f.persistirRecibido = persistir
+	return f.nuevos, f.err
+}
+
 // restaurarSeams guarda y restaura las variables stubbeables + el modo global,
 // para no contaminar otros tests del paquete.
 func restaurarSeams(t *testing.T) {
 	t.Helper()
-	scraperOrig := ejecutarScraper
-	volcarOrig := volcarMovimientos
+	refreshOrig := refrescarDashboard
 	proveedorOrig := proveedor
 	t.Cleanup(func() {
-		ejecutarScraper = scraperOrig
-		volcarMovimientos = volcarOrig
+		refrescarDashboard = refreshOrig
 		proveedor = proveedorOrig
 	})
 }
 
 func TestRefresh_RechazaNoPost(t *testing.T) {
 	restaurarSeams(t)
-	llamado := false
-	ejecutarScraper = func() error { llamado = true; return nil }
+	refresh := &refreshFake{}
+	refrescarDashboard = refresh
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/refresh", nil)
@@ -32,18 +44,16 @@ func TestRefresh_RechazaNoPost(t *testing.T) {
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status: %d", rec.Code)
 	}
-	if llamado {
-		t.Error("no debió correr el scraper en un GET")
+	if refresh.llamado {
+		t.Error("no debió correr el refresh en un GET")
 	}
 }
 
 func TestRefresh_ModoSimpleSoloScrapea(t *testing.T) {
 	restaurarSeams(t)
 	proveedor = "obchile"
-	scrapeado := false
-	volcado := false
-	ejecutarScraper = func() error { scrapeado = true; return nil }
-	volcarMovimientos = func(_ string) (int, error) { volcado = true; return 0, nil }
+	refresh := &refreshFake{}
+	refrescarDashboard = refresh
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)
@@ -52,21 +62,19 @@ func TestRefresh_ModoSimpleSoloScrapea(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: %d (%s)", rec.Code, rec.Body.String())
 	}
-	if !scrapeado {
-		t.Error("debió correr el scraper")
+	if !refresh.llamado {
+		t.Error("debió correr el refresh")
 	}
-	if volcado {
-		t.Error("modo simple NO debe volcar a sqlite")
+	if refresh.persistirRecibido {
+		t.Error("modo simple NO debe persistir")
 	}
 }
 
 func TestRefresh_ModoSqliteScrapeaYVuelca(t *testing.T) {
 	restaurarSeams(t)
 	proveedor = "sqlite"
-	scrapeado := false
-	volcado := false
-	ejecutarScraper = func() error { scrapeado = true; return nil }
-	volcarMovimientos = func(_ string) (int, error) { volcado = true; return 3, nil }
+	refresh := &refreshFake{nuevos: 3}
+	refrescarDashboard = refresh
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)
@@ -75,18 +83,16 @@ func TestRefresh_ModoSqliteScrapeaYVuelca(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: %d (%s)", rec.Code, rec.Body.String())
 	}
-	if !scrapeado || !volcado {
-		t.Errorf("modo sqlite debe scrapear (%v) y volcar (%v)", scrapeado, volcado)
+	if !refresh.llamado || !refresh.persistirRecibido {
+		t.Errorf("modo sqlite debe refrescar (%v) y persistir (%v)", refresh.llamado, refresh.persistirRecibido)
 	}
 }
 
 func TestRefresh_ModoCompuestoScrapeaYVuelca(t *testing.T) {
 	restaurarSeams(t)
 	proveedor = "compuesto"
-	scrapeado := false
-	volcado := false
-	ejecutarScraper = func() error { scrapeado = true; return nil }
-	volcarMovimientos = func(_ string) (int, error) { volcado = true; return 3, nil }
+	refresh := &refreshFake{nuevos: 3}
+	refrescarDashboard = refresh
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)
@@ -95,15 +101,15 @@ func TestRefresh_ModoCompuestoScrapeaYVuelca(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: %d (%s)", rec.Code, rec.Body.String())
 	}
-	if !scrapeado || !volcado {
-		t.Errorf("modo compuesto debe scrapear (%v) y volcar (%v)", scrapeado, volcado)
+	if !refresh.llamado || !refresh.persistirRecibido {
+		t.Errorf("modo compuesto debe refrescar (%v) y persistir (%v)", refresh.llamado, refresh.persistirRecibido)
 	}
 }
 
 func TestRefresh_ErrorDeScraperEs500(t *testing.T) {
 	restaurarSeams(t)
 	proveedor = "obchile"
-	ejecutarScraper = func() error { return http.ErrAbortHandler }
+	refrescarDashboard = &refreshFake{err: errors.New("boom")}
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)

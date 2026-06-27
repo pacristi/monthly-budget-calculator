@@ -2,31 +2,14 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"os/exec"
-
-	"presupuesto/internal/cartola/fuentes"
-	"presupuesto/internal/cartola/ingesta"
 )
 
-// ejecutarScraper corre el scraper de Node (`ingest/scraper.js`), que trae la
-// cartola del día y sobrescribe data/current.json. Equivale a `make ingest`.
-// Es una variable para poder stubbearla en los tests sin invocar Node.
-var ejecutarScraper = func() error {
-	cmd := exec.Command("node", "scraper.js")
-	cmd.Dir = "ingest"
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("scraper: %v: %s", err, out)
-	}
-	return nil
+type refreshUseCase interface {
+	Ejecutar(persistir bool) (int, error)
 }
 
-// volcarMovimientos ingesta el current.json recién scrapeado al repositorio de
-// movimientos configurado. Variable para stubbearla en tests.
-var volcarMovimientos = func(jsonPath string) (int, error) {
-	return ingesta.DesdeFuente(fuentes.NuevaOpenBankingChile(jsonPath), repoMovimientos)
-}
+var refrescarDashboard refreshUseCase
 
 // handleRefresh dispara una ingesta nueva desde el dashboard, equivalente a
 // `make ingest` (modo simple) o `make ingest-sqlite` (modo avanzado). El server
@@ -45,19 +28,10 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ejecutarScraper(); err != nil {
+	nuevos, err := refrescarDashboard.Ejecutar(proveedor == "sqlite" || proveedor == "compuesto")
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	nuevos := 0
-	if proveedor == "sqlite" || proveedor == "compuesto" {
-		n, err := volcarMovimientos("data/current.json")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		nuevos = n
 	}
 
 	w.Header().Set("Content-Type", "application/json")

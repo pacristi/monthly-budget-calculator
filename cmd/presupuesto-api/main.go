@@ -14,8 +14,10 @@ import (
 	"github.com/joho/godotenv"
 	_ "modernc.org/sqlite"
 	"presupuesto/internal/cartola/compuesto"
+	"presupuesto/internal/cartola/fuentes"
 	"presupuesto/internal/cartola/ingesta"
 	"presupuesto/internal/cartola/obchile"
+	"presupuesto/internal/cartola/refresh"
 	"presupuesto/internal/cartola/shared"
 	sqlitepkg "presupuesto/internal/cartola/sqlite"
 	"presupuesto/internal/config"
@@ -23,19 +25,20 @@ import (
 )
 
 var (
-	rutaJson        string
-	rutaDivisiones  string
-	rutaExclusiones string
-	rutaReglas      string
-	rutaCategorias  string
-	rutaSueldo      string
-	repoConfigs     *config.RepoJSON
-	repoCategorias  *config.RepoCategorias
-	proveedor       string
-	dbPath          string
-	rutaManuales    string
-	db              *sql.DB
-	repoMovimientos ingesta.RepositorioMovimientos
+	rutaJson         string
+	scrapeOutputPath string
+	rutaDivisiones   string
+	rutaExclusiones  string
+	rutaReglas       string
+	rutaCategorias   string
+	rutaSueldo       string
+	repoConfigs      *config.RepoJSON
+	repoCategorias   *config.RepoCategorias
+	proveedor        string
+	dbPath           string
+	rutaManuales     string
+	db               *sql.DB
+	repoMovimientos  ingesta.RepositorioMovimientos
 )
 
 func main() {
@@ -61,6 +64,10 @@ func main() {
 	rutaCategorias = *categoriasFlag
 	rutaSueldo = *sueldoFlag
 	rutaManuales = *manualesFlag
+	scrapeOutputPath = *provisorioFlag
+	if scrapeOutputPath == "" {
+		scrapeOutputPath = "data/current.json"
+	}
 
 	repoConfigs = config.NewRepoJSON(*rutaConfigsFlag)
 	repoCategorias = config.NewRepoCategorias(rutaCategorias)
@@ -93,6 +100,11 @@ func main() {
 		repoMovimientos = sqlitepkg.NewWriter(db, "obchile")
 	default:
 		log.Fatalf("--proveedor inválido: %s (compuesto | sqlite | obchile)", proveedor)
+	}
+	refrescarDashboard = refresh.CasoDeUso{
+		Scraper:     nodeScraper{Dir: "ingest", Script: "scraper.js", OutputPath: scrapeOutputPath},
+		Fuente:      fuentes.NuevaOpenBankingChile(scrapeOutputPath),
+		Repositorio: repoMovimientos,
 	}
 
 	// Servir archivos estáticos. noCache fuerza al navegador a revalidar antes de

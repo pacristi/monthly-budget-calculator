@@ -39,8 +39,9 @@ async function run() {
   fs.writeFileSync(archivePath, dataStr);
   console.log(`✅ Histórico guardado en: ${archivePath}`);
 
-  // 2. Sobrescribir el estado actual en /data/current.json
-  const currentPath = path.join(currentDir, '../data/current.json');
+  // 2. Sobrescribir el estado actual en /data/current.json, o en la ruta
+  // configurada por el proceso Go para que refresh lea el mismo archivo.
+  const currentPath = process.env.SCRAPER_OUTPUT_PATH || path.join(currentDir, '../data/current.json');
   fs.writeFileSync(currentPath, dataStr);
   console.log(`✅ Estado actual sobrescrito en: ${currentPath}`);
 }
