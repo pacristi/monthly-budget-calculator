@@ -10,13 +10,10 @@ import (
 
 	"github.com/joho/godotenv"
 	_ "modernc.org/sqlite"
-	"presupuesto/internal/ajustes"
-	"presupuesto/internal/cartola/compuesto"
+	"presupuesto/internal/app/bootstrap"
 	"presupuesto/internal/cartola/fuentes"
 	"presupuesto/internal/cartola/ingesta"
-	"presupuesto/internal/cartola/obchile"
 	sqlitepkg "presupuesto/internal/cartola/sqlite"
-	"presupuesto/internal/config"
 	"presupuesto/internal/presupuesto"
 )
 
@@ -47,54 +44,51 @@ func main() {
 	manualesFlag := flag.String("manuales", "data/manuales.json", "Ruta al JSON de gastos manuales")
 	flag.Parse()
 
-	reglas, _ := ajustes.CargarReglas(*reglasFlag, *exclusionesFlag)
-
 	fmt.Printf("Iniciando Calculadora de Presupuesto Mensual\n")
 
-	repoConfigs := config.NewRepoJSON(*rutaConfigsFlag)
-	if err := config.EnsureSeed(repoConfigs, config.SeedPorDefecto(time.Now())); err != nil {
-		log.Fatalf("inicializando configs: %v", err)
-	}
-
-	var adaptador presupuesto.ProveedorFinanciero
-
-	switch *proveedorFlag {
-	case "obchile":
+	legacyJSONPath := ""
+	divisionesPath := *divisionesFlag
+	if *proveedorFlag == "obchile" {
 		args := flag.Args()
 		if len(args) < 1 {
 			log.Fatalf("Uso: presupuesto-cli [...] --proveedor obchile <ruta_json> [ruta_divisiones]")
 		}
-		rutaJson := args[0]
-		rutaDivisiones := ""
+		legacyJSONPath = args[0]
+		divisionesPath = ""
 		if len(args) > 1 {
-			rutaDivisiones = args[1]
+			divisionesPath = args[1]
 		}
-		fmt.Printf("Leyendo desde JSON: %s\n", rutaJson)
-		adaptador = obchile.NewAdapter(rutaJson, rutaDivisiones, reglas, *sueldoFlag, *manualesFlag, repoConfigs)
-	case "sqlite", "compuesto":
-		db, err := sql.Open("sqlite", *dbPathFlag)
-		if err != nil {
-			log.Fatalf("abriendo BD: %v", err)
-		}
-		defer db.Close()
-		if err := sqlitepkg.Up(db); err != nil {
-			log.Fatalf("migraciones: %v", err)
-		}
-		liquidado := sqlitepkg.NewAdapter(db, *divisionesFlag, reglas, *sueldoFlag, *manualesFlag, repoConfigs)
-		if *proveedorFlag == "sqlite" {
-			fmt.Printf("Leyendo desde sqlite: %s\n", *dbPathFlag)
-			adaptador = liquidado
-		} else {
-			var provisorio presupuesto.ProveedorFinanciero
-			if archivoExiste(*provisorioFlag) {
-				provisorio = obchile.NewAdapterProvisorio(*provisorioFlag, *divisionesFlag, reglas, repoConfigs)
-			}
-			fmt.Printf("Leyendo compuesto: sqlite %s + provisorio %s\n", *dbPathFlag, *provisorioFlag)
-			adaptador = compuesto.NewDesdeFuentes(liquidado, provisorio)
-		}
-	default:
-		log.Fatalf("--proveedor inválido: %s (compuesto | sqlite | obchile)", *proveedorFlag)
 	}
+
+	app, err := bootstrap.New(bootstrap.Config{
+		Proveedor:       *proveedorFlag,
+		ConfigsPath:     *rutaConfigsFlag,
+		CategoriasPath:  *categoriasFlag,
+		DBPath:          *dbPathFlag,
+		ProvisorioPath:  *provisorioFlag,
+		DivisionesPath:  divisionesPath,
+		ExclusionesPath: *exclusionesFlag,
+		ReglasPath:      *reglasFlag,
+		SueldoPath:      *sueldoFlag,
+		ManualesPath:    *manualesFlag,
+		LegacyJSONPath:  legacyJSONPath,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer app.Close()
+
+	switch app.Proveedor {
+	case "obchile":
+		fmt.Printf("Leyendo desde JSON: %s\n", legacyJSONPath)
+	case "sqlite":
+		fmt.Printf("Leyendo desde sqlite: %s\n", *dbPathFlag)
+	case "compuesto":
+		fmt.Printf("Leyendo compuesto: sqlite %s + provisorio %s\n", *dbPathFlag, app.ProvisorioPath)
+	}
+
+	adaptador := app.Adaptador
+	repoConfigs := app.RepoConfigs
 	calc := presupuesto.NewCalculadora(adaptador, repoConfigs)
 
 	ahora := time.Now()
@@ -108,7 +102,7 @@ func main() {
 		log.Fatalf("Error resolviendo config del mes: %v", err)
 	}
 
-	categorias, err := config.NewRepoCategorias(*categoriasFlag).Listar()
+	categorias, err := app.RepoCategorias.Listar()
 	if err != nil {
 		log.Fatalf("Error leyendo categorías: %v", err)
 	}
@@ -162,16 +156,6 @@ func main() {
 		}
 		fmt.Println("=============================")
 	}
-}
-
-// archivoExiste indica si hay un archivo legible en la ruta. Lo usa el modo
-// compuesto para decidir si hay capa provisoria (scrape) o no.
-func archivoExiste(ruta string) bool {
-	if ruta == "" {
-		return false
-	}
-	_, err := os.Stat(ruta)
-	return err == nil
 }
 
 func runIngestarSubcommand(args []string) {
