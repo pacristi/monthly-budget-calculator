@@ -119,8 +119,10 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 			continue
 		}
 
+		movimientoID := fmt.Sprintf("sql-%d", id)
+
 		// Clasificar: override manual > regla por patrón > categoría default.
-		overrideCat := ajustes.CategoriaOverride(fechaISO, monto, descripcion, a.overrides)
+		overrideCat := ajustes.CategoriaOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
 		categoria := presupuesto.Clasificar(descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 		if categoria == presupuesto.Ignorado {
 			continue
@@ -131,7 +133,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 			return nil, fmt.Errorf("resolviendo config %s: %w", fechaISO, err)
 		}
 
-		montoCrudo := ajustes.AplicarOverrides(monto, fechaISO, descripcion, a.overrides)
+		montoCrudo := ajustes.AplicarOverrides(movimientoID, monto, fechaISO, descripcion, a.overrides)
 		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, cfg.TasaCambioUSD))
 
 		tipo := presupuesto.Debito
@@ -142,7 +144,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 		}
 
 		gastos = append(gastos, presupuesto.Gasto{
-			ID:               fmt.Sprintf("sql-%d", id),
+			ID:               movimientoID,
 			Descripcion:      descripcion,
 			MontoImputado:    montoImputado,
 			Cuotas:           shared.ParsearCuotas(cuotasStr),
@@ -169,7 +171,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 // ObtenerMovimientos devuelve solo los movimientos con monto negativo
 // (cargos) aplicando overrides al campo MiParte.
 func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
-	rows, err := a.db.Query(`SELECT fecha, monto, descripcion, is_usd
+	rows, err := a.db.Query(`SELECT id, fecha, monto, descripcion, is_usd
 		FROM movimientos WHERE monto < 0 ORDER BY fecha DESC, id DESC`)
 	if err != nil {
 		return nil, err
@@ -178,10 +180,11 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 
 	var out []presupuesto.Movimiento
 	for rows.Next() {
+		var id int
 		var fechaISO, descripcion string
 		var monto float64
 		var isUSDInt int
-		if err := rows.Scan(&fechaISO, &monto, &descripcion, &isUSDInt); err != nil {
+		if err := rows.Scan(&id, &fechaISO, &monto, &descripcion, &isUSDInt); err != nil {
 			return nil, err
 		}
 		fecha, err := time.Parse("2006-01-02", fechaISO)
@@ -189,21 +192,14 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 			continue
 		}
 
-		var miParte *float64
-		for _, o := range a.overrides {
-			if o.Descripcion == "" {
-				continue
-			}
-			if o.Fecha == fechaISO && o.MontoOriginal == monto && o.Descripcion == descripcion {
-				miParte = o.MiParte
-				break
-			}
-		}
+		movimientoID := fmt.Sprintf("sql-%d", id)
+		miParte := ajustes.MiParteOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
 
-		overrideCat := ajustes.CategoriaOverride(fechaISO, monto, descripcion, a.overrides)
+		overrideCat := ajustes.CategoriaOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
 		categoria := presupuesto.Clasificar(descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 
 		out = append(out, presupuesto.Movimiento{
+			ID:          movimientoID,
 			Fecha:       fecha,
 			Descripcion: descripcion,
 			Monto:       monto,

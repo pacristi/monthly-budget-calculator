@@ -353,6 +353,7 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type MovimientoRes struct {
+		ID          string   `json:"id"`
 		Fecha       string   `json:"fecha"`
 		Descripcion string   `json:"descripcion"`
 		Monto       float64  `json:"monto"`
@@ -364,6 +365,7 @@ func handleMovements(w http.ResponseWriter, r *http.Request) {
 	result := make([]MovimientoRes, 0, len(movs))
 	for _, m := range movs {
 		result = append(result, MovimientoRes{
+			ID:          m.ID,
 			Fecha:       m.Fecha.Format("2006-01-02"),
 			Descripcion: m.Descripcion,
 			Monto:       m.Monto,
