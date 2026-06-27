@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"presupuesto/internal/app/bootstrap"
 )
 
 type refreshFake struct {
@@ -20,26 +22,13 @@ func (f *refreshFake) Ejecutar(persistir bool) (int, error) {
 	return f.nuevos, f.err
 }
 
-// restaurarSeams guarda y restaura las variables stubbeables + el modo global,
-// para no contaminar otros tests del paquete.
-func restaurarSeams(t *testing.T) {
-	t.Helper()
-	refreshOrig := refrescarDashboard
-	proveedorOrig := proveedor
-	t.Cleanup(func() {
-		refrescarDashboard = refreshOrig
-		proveedor = proveedorOrig
-	})
-}
-
 func TestRefresh_RechazaNoPost(t *testing.T) {
-	restaurarSeams(t)
 	refresh := &refreshFake{}
-	refrescarDashboard = refresh
+	deps := apiDeps{app: &bootstrap.App{Proveedor: "obchile"}, refresh: refresh}
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/refresh", nil)
-	handleRefresh(rec, req)
+	deps.handleRefresh(rec, req)
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status: %d", rec.Code)
@@ -50,14 +39,12 @@ func TestRefresh_RechazaNoPost(t *testing.T) {
 }
 
 func TestRefresh_ModoSimpleSoloScrapea(t *testing.T) {
-	restaurarSeams(t)
-	proveedor = "obchile"
 	refresh := &refreshFake{}
-	refrescarDashboard = refresh
+	deps := apiDeps{app: &bootstrap.App{Proveedor: "obchile"}, refresh: refresh}
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)
-	handleRefresh(rec, req)
+	deps.handleRefresh(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: %d (%s)", rec.Code, rec.Body.String())
@@ -71,14 +58,12 @@ func TestRefresh_ModoSimpleSoloScrapea(t *testing.T) {
 }
 
 func TestRefresh_ModoSqliteScrapeaYVuelca(t *testing.T) {
-	restaurarSeams(t)
-	proveedor = "sqlite"
 	refresh := &refreshFake{nuevos: 3}
-	refrescarDashboard = refresh
+	deps := apiDeps{app: &bootstrap.App{Proveedor: "sqlite"}, refresh: refresh}
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)
-	handleRefresh(rec, req)
+	deps.handleRefresh(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: %d (%s)", rec.Code, rec.Body.String())
@@ -89,14 +74,12 @@ func TestRefresh_ModoSqliteScrapeaYVuelca(t *testing.T) {
 }
 
 func TestRefresh_ModoCompuestoScrapeaYVuelca(t *testing.T) {
-	restaurarSeams(t)
-	proveedor = "compuesto"
 	refresh := &refreshFake{nuevos: 3}
-	refrescarDashboard = refresh
+	deps := apiDeps{app: &bootstrap.App{Proveedor: "compuesto"}, refresh: refresh}
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)
-	handleRefresh(rec, req)
+	deps.handleRefresh(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: %d (%s)", rec.Code, rec.Body.String())
@@ -107,13 +90,11 @@ func TestRefresh_ModoCompuestoScrapeaYVuelca(t *testing.T) {
 }
 
 func TestRefresh_ErrorDeScraperEs500(t *testing.T) {
-	restaurarSeams(t)
-	proveedor = "obchile"
-	refrescarDashboard = &refreshFake{err: errors.New("boom")}
+	deps := apiDeps{app: &bootstrap.App{Proveedor: "obchile"}, refresh: &refreshFake{err: errors.New("boom")}}
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)
-	handleRefresh(rec, req)
+	deps.handleRefresh(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status: %d", rec.Code)

@@ -9,10 +9,10 @@ import (
 )
 
 // handleCategorias sirve GET (lista) y POST (reemplazo total) de categorías.
-func handleCategorias(w http.ResponseWriter, r *http.Request) {
+func (deps apiDeps) handleCategorias(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		cats, err := repoCategorias.Listar()
+		cats, err := deps.app.RepoCategorias.Listar()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -25,7 +25,7 @@ func handleCategorias(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := repoCategorias.Guardar(cats); err != nil {
+		if err := deps.app.RepoCategorias.Guardar(cats); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -38,10 +38,10 @@ func handleCategorias(w http.ResponseWriter, r *http.Request) {
 
 // handleReglas sirve GET (reglas efectivas, migrando exclusiones legacy) y
 // POST (reemplazo total) de reglas de categorización.
-func handleReglas(w http.ResponseWriter, r *http.Request) {
+func (deps apiDeps) handleReglas(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		reglas, err := ajustes.CargarReglas(rutaReglas, rutaExclusiones)
+		reglas, err := ajustes.CargarReglas(deps.app.ReglasPath, deps.app.ExclusionesPath)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -57,7 +57,7 @@ func handleReglas(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := ajustes.EscribirReglas(rutaReglas, reglas); err != nil {
+		if err := ajustes.EscribirReglas(deps.app.ReglasPath, reglas); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -71,12 +71,12 @@ func handleReglas(w http.ResponseWriter, r *http.Request) {
 // handleMovimientoCategoria asigna a mano la categoría de un movimiento,
 // preservando el split (MiParte) si ya existía. Persiste en el archivo de
 // divisiones (mismo registro de override, preferentemente por movimientoId).
-func handleMovimientoCategoria(w http.ResponseWriter, r *http.Request) {
+func (deps apiDeps) handleMovimientoCategoria(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if rutaDivisiones == "" {
+	if deps.app.DivisionesPath == "" {
 		http.Error(w, "No divisions file configured", http.StatusBadRequest)
 		return
 	}
@@ -87,7 +87,7 @@ func handleMovimientoCategoria(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ajustes.GuardarCategoria(rutaDivisiones, ajustes.Override{
+	if err := ajustes.GuardarCategoria(deps.app.DivisionesPath, ajustes.Override{
 		MovimientoID:  req.MovimientoID,
 		Fecha:         req.Fecha,
 		MontoOriginal: req.MontoOriginal,
