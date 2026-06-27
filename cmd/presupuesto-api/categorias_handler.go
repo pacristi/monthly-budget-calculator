@@ -87,7 +87,7 @@ func handleMovimientoCategoria(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ajustes.GuardarOverride(rutaDivisiones, ajustes.Override{
+	if err := ajustes.GuardarCategoria(rutaDivisiones, ajustes.Override{
 		Fecha:         req.Fecha,
 		MontoOriginal: req.MontoOriginal,
 		Descripcion:   req.Descripcion,

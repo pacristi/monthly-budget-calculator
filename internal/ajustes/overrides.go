@@ -39,9 +39,23 @@ func LeerOverrides(ruta string) ([]Override, error) {
 	return overrides, nil
 }
 
-// GuardarOverride inserta o actualiza un ajuste preservando los otros campos
-// del mismo movimiento.
-func GuardarOverride(ruta string, override Override) error {
+// GuardarMiParte inserta o actualiza el ajuste de split de un movimiento,
+// preservando su categoría manual si ya existía.
+func GuardarMiParte(ruta string, override Override) error {
+	return guardarOverride(ruta, override, func(actual *Override, nuevo Override) {
+		actual.MiParte = nuevo.MiParte
+	})
+}
+
+// GuardarCategoria inserta o actualiza la categoría manual de un movimiento,
+// preservando su split si ya existía. Categoria="" limpia la categoría manual.
+func GuardarCategoria(ruta string, override Override) error {
+	return guardarOverride(ruta, override, func(actual *Override, nuevo Override) {
+		actual.Categoria = nuevo.Categoria
+	})
+}
+
+func guardarOverride(ruta string, override Override, aplicar func(*Override, Override)) error {
 	overrides, err := LeerOverrides(ruta)
 	if err != nil {
 		overrides = []Override{}
@@ -50,17 +64,13 @@ func GuardarOverride(ruta string, override Override) error {
 	found := false
 	for i := range overrides {
 		if overrides[i].Fecha == override.Fecha && overrides[i].MontoOriginal == override.MontoOriginal && overrides[i].Descripcion == override.Descripcion {
-			if override.MiParte != nil {
-				overrides[i].MiParte = override.MiParte
-			}
-			if override.Categoria != "" {
-				overrides[i].Categoria = override.Categoria
-			}
+			aplicar(&overrides[i], override)
 			found = true
 			break
 		}
 	}
 	if !found {
+		aplicar(&override, override)
 		overrides = append(overrides, override)
 	}
 

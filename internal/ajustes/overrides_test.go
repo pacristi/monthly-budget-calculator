@@ -60,3 +60,84 @@ func TestAplicarOverrides_MatchPorFechaMontoYDescripcion(t *testing.T) {
 		}
 	})
 }
+
+func TestGuardarMiPartePreservaCategoria(t *testing.T) {
+	ruta := t.TempDir() + "/overrides.json"
+
+	if err := GuardarCategoria(ruta, Override{
+		Fecha:         "2025-05-15",
+		MontoOriginal: -3500,
+		Descripcion:   "Starbucks café AM",
+		Categoria:     "cafes",
+	}); err != nil {
+		t.Fatalf("guardando categoría: %v", err)
+	}
+
+	if err := GuardarMiParte(ruta, Override{
+		Fecha:         "2025-05-15",
+		MontoOriginal: -3500,
+		Descripcion:   "Starbucks café AM",
+		MiParte:       ptrF(-1750),
+	}); err != nil {
+		t.Fatalf("guardando mi parte: %v", err)
+	}
+
+	overrides, err := LeerOverrides(ruta)
+	if err != nil {
+		t.Fatalf("leyendo overrides: %v", err)
+	}
+	if len(overrides) != 1 {
+		t.Fatalf("esperaba 1 override, obtuve %d", len(overrides))
+	}
+	if overrides[0].Categoria != "cafes" {
+		t.Fatalf("GuardarMiParte debe preservar categoría, obtuvo %q", overrides[0].Categoria)
+	}
+	if overrides[0].MiParte == nil || *overrides[0].MiParte != -1750 {
+		t.Fatalf("MiParte no guardada correctamente: %+v", overrides[0].MiParte)
+	}
+}
+
+func TestGuardarCategoriaPermiteLimpiarCategoria(t *testing.T) {
+	ruta := t.TempDir() + "/overrides.json"
+
+	if err := GuardarMiParte(ruta, Override{
+		Fecha:         "2025-05-15",
+		MontoOriginal: -3500,
+		Descripcion:   "Starbucks café AM",
+		MiParte:       ptrF(-1750),
+		Categoria:     "cafes",
+	}); err != nil {
+		t.Fatalf("guardando mi parte: %v", err)
+	}
+	if err := GuardarCategoria(ruta, Override{
+		Fecha:         "2025-05-15",
+		MontoOriginal: -3500,
+		Descripcion:   "Starbucks café AM",
+		Categoria:     "cafes",
+	}); err != nil {
+		t.Fatalf("guardando categoría: %v", err)
+	}
+
+	if err := GuardarCategoria(ruta, Override{
+		Fecha:         "2025-05-15",
+		MontoOriginal: -3500,
+		Descripcion:   "Starbucks café AM",
+		Categoria:     "",
+	}); err != nil {
+		t.Fatalf("limpiando categoría: %v", err)
+	}
+
+	overrides, err := LeerOverrides(ruta)
+	if err != nil {
+		t.Fatalf("leyendo overrides: %v", err)
+	}
+	if len(overrides) != 1 {
+		t.Fatalf("esperaba 1 override, obtuve %d", len(overrides))
+	}
+	if overrides[0].Categoria != "" {
+		t.Fatalf("GuardarCategoria debe permitir limpiar categoría, obtuvo %q", overrides[0].Categoria)
+	}
+	if overrides[0].MiParte == nil || *overrides[0].MiParte != -1750 {
+		t.Fatalf("GuardarCategoria debe preservar MiParte, obtuvo %+v", overrides[0].MiParte)
+	}
+}

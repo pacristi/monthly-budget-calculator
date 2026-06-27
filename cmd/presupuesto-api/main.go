@@ -393,7 +393,7 @@ func handleDivisions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ajustes.GuardarOverride(rutaDivisiones, req); err != nil {
+	if err := ajustes.GuardarMiParte(rutaDivisiones, req); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
