@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -237,6 +238,48 @@ func TestInsertarConDedup_CompraEnCuotas_EsIdempotente(t *testing.T) {
 	}
 	if n, _ := w.InsertarConDedup(batch); n != 0 {
 		t.Errorf("segunda corrida: esperaba 0, obtuve %d", n)
+	}
+}
+
+func TestInsertarConDedup_CompraEnCuotas_DedupContraCuotasLegacyPersistidas(t *testing.T) {
+	w := setupDB(t)
+	f, _ := time.Parse("2006-01-02", "2025-01-07")
+
+	legacy := movCuotas("2025-01-07", -108372, "SKY AIRLINE", "01/03")
+	if err := w.insertOne(legacy, f.Format(time.RFC3339)); err != nil {
+		t.Fatalf("insert legacy: %v", err)
+	}
+
+	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "01/03"),
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "02/03"),
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "03/03"),
+	})
+	if err != nil {
+		t.Fatalf("InsertarConDedup: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("esperaba dedup contra fila legacy persistida, obtuve %d inserts", n)
+	}
+}
+
+func TestInsertarConDedup_CompraEnCuotas_FactsCanonicosFaltantesRetornaError(t *testing.T) {
+	w := setupDB(t)
+	f, _ := time.Parse("2006-01-02", "2025-01-07")
+	m := ingest.MovimientoBruto{
+		Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
+		Descripcion: "SKY AIRLINE", Cuotas: "01/03", CuotaActual: 1, CuotasTotales: 3,
+	}
+
+	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{m})
+	if err == nil {
+		t.Fatal("esperaba error por MontoRepresenta faltante")
+	}
+	if n != 0 {
+		t.Errorf("no debería insertar con facts canónicos incompletos, obtuvo %d", n)
+	}
+	if !strings.Contains(err.Error(), "sin MontoRepresenta") {
+		t.Errorf("error = %v, esperaba contexto de MontoRepresenta faltante", err)
 	}
 }
 

@@ -117,7 +117,11 @@ func (w *Writer) insertarCompraEnCuotas(batch []ingest.MovimientoBruto, fechaCar
 		if yaExiste {
 			continue
 		}
-		representante, ok := construirRepresentanteCompra(group)
+		representante, ok, err := construirRepresentanteCompra(group)
+		if err != nil {
+			return total, fmt.Errorf("construyendo representante compra en cuotas (%s,%s,%s,N=%d): %w",
+				k.banco, k.fecha, k.descripcionNorm, k.totalCuotas, err)
+		}
 		if !ok {
 			// Solo había filas "00/N" (informativas, sin facturar). No
 			// insertamos nada todavía; cuando aparezca al menos una cuota
@@ -145,9 +149,9 @@ func (w *Writer) insertarCompraEnCuotas(batch []ingest.MovimientoBruto, fechaCar
 //
 // Las filas con CuotaActual=0 son informativas (sin facturar) y se ignoran.
 //
-// Retorna (representante, true) si pudo construirla, (zero, false) si el
-// grupo no contiene cuotas que aporten monto (todas CuotaActual=0).
-func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.MovimientoBruto, bool) {
+// Retorna (representante, true, nil) si pudo construirla, (zero, false, nil)
+// si el grupo no contiene cuotas que aporten monto (todas CuotaActual=0).
+func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.MovimientoBruto, bool, error) {
 	for _, m := range group {
 		if m.CuotaActual == 0 {
 			continue
@@ -155,7 +159,7 @@ func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.Movimi
 		if m.MontoRepresenta == ingest.MontoRepresentaTotal {
 			base := m
 			base.Cuotas = fmt.Sprintf("00/%02d", m.CuotasTotales)
-			return base, true
+			return base, true, nil
 		}
 	}
 
@@ -167,6 +171,10 @@ func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.Movimi
 
 	for _, m := range group {
 		if m.MontoRepresenta != ingest.MontoRepresentaCuota {
+			if m.CuotaActual > 0 && m.MontoRepresenta == "" {
+				return ingest.MovimientoBruto{}, false, fmt.Errorf("movimiento en cuotas sin MontoRepresenta: fecha=%s descripcion=%q cuota=%d/%d",
+					m.Fecha.Format("2006-01-02"), m.Descripcion, m.CuotaActual, m.CuotasTotales)
+			}
 			continue
 		}
 		totalCuotas = m.CuotasTotales
@@ -182,7 +190,7 @@ func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.Movimi
 	}
 
 	if cuotasFacturadas == 0 {
-		return ingest.MovimientoBruto{}, false
+		return ingest.MovimientoBruto{}, false, nil
 	}
 
 	var montoTotal float64
@@ -197,7 +205,7 @@ func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.Movimi
 	// Marcamos las cuotas como "00/N" para señalar que el monto guardado
 	// es el TOTAL de la compra (convención: M=0 ↔ monto total).
 	base.Cuotas = fmt.Sprintf("00/%02d", totalCuotas)
-	return base, true
+	return base, true, nil
 }
 
 func (w *Writer) compraEnCuotasYaEnBD(k cuotaCompraKey) (bool, error) {
@@ -220,11 +228,35 @@ func (w *Writer) compraEnCuotasYaEnBD(k cuotaCompraKey) (bool, error) {
 		if descripcionCanonica(d) != k.descripcionNorm {
 			continue
 		}
-		if c == fmt.Sprintf("00/%02d", k.totalCuotas) {
+		if cuotaPersistidaTieneTotal(c, k.totalCuotas) {
 			return true, nil
 		}
 	}
 	return false, rows.Err()
+}
+
+func cuotaPersistidaTieneTotal(cuotas string, total int) bool {
+	if cuotas == fmt.Sprintf("00/%02d", total) {
+		return true
+	}
+	_, n, ok := parseCuotasPersistidas(cuotas)
+	return ok && n == total
+}
+
+// parseCuotasPersistidas tolera formatos legacy ya guardados en sqlite. El
+// writer no lo usa para interpretar movimientos nuevos del batch.
+func parseCuotasPersistidas(cuotas string) (m, n int, ok bool) {
+	parts := strings.Split(cuotas, "/")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	if _, err := fmt.Sscanf(parts[0], "%d", &m); err != nil {
+		return 0, 0, false
+	}
+	if _, err := fmt.Sscanf(parts[1], "%d", &n); err != nil {
+		return 0, 0, false
+	}
+	return m, n, true
 }
 
 func (w *Writer) insertarSimples(batch []ingest.MovimientoBruto, fechaCarga string) (int, error) {
