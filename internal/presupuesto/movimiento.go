@@ -5,6 +5,7 @@ import "time"
 // Movimiento representa una transacción cruda tal como la entrega un
 // proveedor financiero, con los overrides locales aplicados si corresponde.
 type Movimiento struct {
+	ID          string
 	Fecha       time.Time
 	Descripcion string
 	Monto       float64

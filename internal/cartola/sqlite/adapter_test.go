@@ -3,6 +3,7 @@ package sqlite
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -53,6 +54,26 @@ func insertarMov(t *testing.T, db *sql.DB, fecha string, monto float64, desc, so
 	if err != nil {
 		t.Fatalf("insert: %v", err)
 	}
+}
+
+func insertarMovID(t *testing.T, db *sql.DB, fecha string, monto float64, desc, source string, isUSD bool, cuotas string) int64 {
+	t.Helper()
+	isUSDInt := 0
+	if isUSD {
+		isUSDInt = 1
+	}
+	res, err := db.Exec(`INSERT INTO movimientos
+		(banco, source, fecha, monto, descripcion, is_usd, cuotas, raw, origen, fecha_carga)
+		VALUES ('bchile', ?, ?, ?, ?, ?, ?, '{}', 'test', '2026-05-15T00:00:00Z')`,
+		source, fecha, monto, desc, isUSDInt, cuotas)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
+	}
+	return id
 }
 
 func periodoMayo2026() presupuesto.PeriodoPresupuestario {
@@ -208,7 +229,7 @@ func TestAdapter_ObtenerGastosValidos_AplicaOverride(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	overridesPath := tmpDir + "/divisiones.json"
-	overridesJSON := `[{"fecha":"2026-05-10","montoOriginal":-10000,"descripcion":"Restaurante","miParte":-4000}]`
+	overridesJSON := `[{"movimientoId":"sql-1","fecha":"2026-05-10","montoOriginal":-10000,"descripcion":"Restaurante","miParte":-4000}]`
 	if err := os.WriteFile(overridesPath, []byte(overridesJSON), 0644); err != nil {
 		t.Fatalf("escribiendo overrides: %v", err)
 	}
@@ -222,12 +243,12 @@ func TestAdapter_ObtenerGastosValidos_AplicaOverride(t *testing.T) {
 
 func TestAdapter_ObtenerMovimientos_FiltraPositivosYAplicaMiParte(t *testing.T) {
 	db := setupAdapterDB(t)
-	insertarMov(t, db, "2026-05-10", -10000, "Restaurante", "cta_corriente", false, "")
+	id := insertarMovID(t, db, "2026-05-10", -10000, "Restaurante", "cta_corriente", false, "")
 	insertarMov(t, db, "2026-05-15", 1500000, "SUELDO", "cta_corriente", false, "") // positivo, skip
 
 	tmpDir := t.TempDir()
 	overridesPath := tmpDir + "/divisiones.json"
-	overridesJSON := `[{"fecha":"2026-05-10","montoOriginal":-10000,"descripcion":"Restaurante","miParte":-4000}]`
+	overridesJSON := fmt.Sprintf(`[{"movimientoId":"sql-%d","fecha":"2026-05-10","montoOriginal":-10000,"descripcion":"Restaurante","miParte":-4000}]`, id)
 	if err := os.WriteFile(overridesPath, []byte(overridesJSON), 0644); err != nil {
 		t.Fatalf("escribiendo overrides: %v", err)
 	}

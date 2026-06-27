@@ -70,7 +70,7 @@ func handleReglas(w http.ResponseWriter, r *http.Request) {
 
 // handleMovimientoCategoria asigna a mano la categoría de un movimiento,
 // preservando el split (MiParte) si ya existía. Persiste en el archivo de
-// divisiones (mismo registro de override, terna fecha+monto+descripción).
+// divisiones (mismo registro de override, preferentemente por movimientoId).
 func handleMovimientoCategoria(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -88,6 +88,7 @@ func handleMovimientoCategoria(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ajustes.GuardarCategoria(rutaDivisiones, ajustes.Override{
+		MovimientoID:  req.MovimientoID,
 		Fecha:         req.Fecha,
 		MontoOriginal: req.MontoOriginal,
 		Descripcion:   req.Descripcion,

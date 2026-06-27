@@ -100,7 +100,7 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 
 		// 3. Clasificar: override manual > regla por patrón > categoría default.
 		//    Los movimientos clasificados como ignorados no cuentan en ningún lado.
-		overrideCat := ajustes.CategoriaOverride(fechaISO, mov.Monto, mov.Descripcion, a.overrides)
+		overrideCat := ajustes.CategoriaOverride("", fechaISO, mov.Monto, mov.Descripcion, a.overrides)
 		categoria := presupuesto.Clasificar(mov.Descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 		if categoria == presupuesto.Ignorado {
 			continue
@@ -112,7 +112,7 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 		}
 
 		// 4. Aplicar override (en cruda) y luego normalizar a CLP con tasa del mes
-		montoCrudo := ajustes.AplicarOverrides(mov.Monto, fechaISO, mov.Descripcion, a.overrides)
+		montoCrudo := ajustes.AplicarOverrides("", mov.Monto, fechaISO, mov.Descripcion, a.overrides)
 		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, cfg.TasaCambioUSD))
 
 		// 4. Determinar política de corte (día de corte del mes del movimiento)
@@ -227,18 +227,9 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 		}
 		fechaISO := fecha.Format("2006-01-02")
 
-		var miParte *float64
-		for _, o := range a.overrides {
-			if o.Descripcion == "" {
-				continue
-			}
-			if o.Fecha == fechaISO && o.MontoOriginal == m.Monto && o.Descripcion == m.Descripcion {
-				miParte = o.MiParte
-				break
-			}
-		}
+		miParte := ajustes.MiParteOverride("", fechaISO, m.Monto, m.Descripcion, a.overrides)
 
-		overrideCat := ajustes.CategoriaOverride(fechaISO, m.Monto, m.Descripcion, a.overrides)
+		overrideCat := ajustes.CategoriaOverride("", fechaISO, m.Monto, m.Descripcion, a.overrides)
 		categoria := presupuesto.Clasificar(m.Descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 
 		isUSD := float64(int64(m.Monto)) != m.Monto
