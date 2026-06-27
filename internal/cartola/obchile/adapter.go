@@ -10,14 +10,13 @@ import (
 	"time"
 
 	"presupuesto/internal/ajustes"
-	"presupuesto/internal/cartola/ingest/bchile"
 	"presupuesto/internal/cartola/shared"
 	"presupuesto/internal/presupuesto"
 )
 
 // Adapter implementa presupuesto.ProveedorFinanciero para OBCL.
 type Adapter struct {
-	client         *bchile.Client
+	client         *Client
 	overrides      []ajustes.Override
 	reglas         []presupuesto.Regla
 	patronesSueldo []string
@@ -33,7 +32,7 @@ func NewAdapter(rutaJson string, rutaDivisiones string, reglas []presupuesto.Reg
 	patronesSueldo, _ := ajustes.LeerListaStrings(rutaSueldo)
 
 	return &Adapter{
-		client:         bchile.NewClient(rutaJson),
+		client:         NewClient(rutaJson),
 		overrides:      overrides,
 		reglas:         reglas,
 		patronesSueldo: patronesSueldo,
@@ -49,7 +48,7 @@ func NewAdapter(rutaJson string, rutaDivisiones string, reglas []presupuesto.Reg
 func NewAdapterProvisorio(rutaJson, rutaDivisiones string, reglas []presupuesto.Regla, resolvedor presupuesto.ResolvedorConfig) *Adapter {
 	overrides, _ := ajustes.LeerOverrides(rutaDivisiones)
 	return &Adapter{
-		client:       bchile.NewClient(rutaJson),
+		client:       NewClient(rutaJson),
 		overrides:    overrides,
 		reglas:       reglas,
 		resolvedor:   resolvedor,

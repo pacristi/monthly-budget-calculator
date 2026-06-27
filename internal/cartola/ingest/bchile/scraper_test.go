@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"presupuesto/internal/cartola/ingest"
-	"presupuesto/internal/cartola/obchile/facts"
+	"presupuesto/internal/cartola/obchile"
 )
 
 func TestInstrumentoDeSource(t *testing.T) {
@@ -23,7 +23,7 @@ func TestInstrumentoDeSource(t *testing.T) {
 		{"algo_que_obcl_invente_manana", ingest.InstrumentoDesconocido},
 	}
 	for _, c := range casos {
-		if got := facts.InstrumentoDeSource(c.source); got != c.quiero {
+		if got := obchile.InstrumentoDeSource(c.source); got != c.quiero {
 			t.Errorf("InstrumentoDeSource(%q) = %q, quiero %q", c.source, got, c.quiero)
 		}
 	}
@@ -41,7 +41,7 @@ func TestMonedaDeMonto(t *testing.T) {
 		{-2.56, ingest.MonedaUSD},
 	}
 	for _, c := range casos {
-		if got := facts.MonedaDeMonto(c.monto); got != c.quiero {
+		if got := obchile.MonedaDeMonto(c.monto); got != c.quiero {
 			t.Errorf("MonedaDeMonto(%v) = %q, quiero %q", c.monto, got, c.quiero)
 		}
 	}
