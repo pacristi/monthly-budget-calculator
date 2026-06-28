@@ -34,7 +34,7 @@ func TestCompuesto_SueldoVieneDeLiquidado(t *testing.T) {
 	liquidado := proveedorFake{sueldo: 1500000}
 	provisorio := proveedorFake{sueldoErr: errors.New("el provisorio no debería ser consultado por el sueldo")}
 
-	c := NewAdapter(liquidado, provisorio, liquidado, provisorio)
+	c := newAdapter(liquidado, provisorio, liquidado, provisorio)
 	sueldo, err := c.ObtenerSueldoBase(presupuesto.PeriodoPresupuestario{})
 	if err != nil {
 		t.Fatalf("error inesperado: %v", err)
@@ -48,7 +48,7 @@ func TestCompuesto_GastosMergeaAmbasCapas(t *testing.T) {
 	liquidado := proveedorFake{gastos: []presupuesto.Gasto{{ID: "liq-1", Descripcion: "FACTURADO"}}}
 	provisorio := proveedorFake{gastos: []presupuesto.Gasto{{ID: "prov-1", Descripcion: "UNBILLED"}}}
 
-	c := NewAdapter(liquidado, provisorio, liquidado, provisorio)
+	c := newAdapter(liquidado, provisorio, liquidado, provisorio)
 	gastos, err := c.ObtenerGastosValidos(presupuesto.PeriodoPresupuestario{})
 	if err != nil {
 		t.Fatalf("error inesperado: %v", err)
@@ -103,7 +103,7 @@ func TestCompuesto_MovimientosMergeaAmbasCapas(t *testing.T) {
 	liquidado := proveedorFake{movimientos: []presupuesto.Movimiento{{Descripcion: "FACTURADO"}}}
 	provisorio := proveedorFake{movimientos: []presupuesto.Movimiento{{Descripcion: "UNBILLED"}}}
 
-	c := NewAdapter(liquidado, provisorio, liquidado, provisorio)
+	c := newAdapter(liquidado, provisorio, liquidado, provisorio)
 	movs, err := c.ObtenerMovimientos()
 	if err != nil {
 		t.Fatalf("error inesperado: %v", err)

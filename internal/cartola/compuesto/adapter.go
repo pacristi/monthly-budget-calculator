@@ -20,8 +20,7 @@ type Adapter struct {
 	provVista  presentacion.Presentador
 }
 
-// NewAdapter construye el Compuesto a partir de los dos proveedores.
-func NewAdapter(liquidado, provisorio presupuesto.ProveedorFinanciero, liqVista, provVista presentacion.Presentador) *Adapter {
+func newAdapter(liquidado, provisorio presupuesto.ProveedorFinanciero, liqVista, provVista presentacion.Presentador) *Adapter {
 	return &Adapter{liquidado: liquidado, provisorio: provisorio, liqVista: liqVista, provVista: provVista}
 }
 
@@ -41,7 +40,7 @@ func NewDesdeFuentes(liquidado, provisorio presupuesto.ProveedorFinanciero) (pre
 	if !ok {
 		return nil, nil, fmt.Errorf("fuente provisoria sin vista de movimientos")
 	}
-	adaptador := NewAdapter(liquidado, provisorio, presentadorLiquidado, presentadorProvisorio)
+	adaptador := newAdapter(liquidado, provisorio, presentadorLiquidado, presentadorProvisorio)
 	return adaptador, adaptador, nil
 }
 
