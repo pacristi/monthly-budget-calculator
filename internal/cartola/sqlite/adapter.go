@@ -12,6 +12,7 @@ import (
 	"presupuesto/internal/ajustes"
 	"presupuesto/internal/cartola/ingest"
 	"presupuesto/internal/cartola/shared"
+	"presupuesto/internal/presentacion"
 	"presupuesto/internal/presupuesto"
 )
 
@@ -209,7 +210,18 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 			CategoriaID: categoria,
 		})
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (a *Adapter) PresentarMovimientos() ([]presentacion.Movimiento, error) {
+	movs, err := a.ObtenerMovimientos()
+	if err != nil {
+		return nil, err
+	}
+	return presentacion.Movimientos(movs, a.overrides), nil
 }
 
 func (a *Adapter) leerGastosManuales() ([]presupuesto.Gasto, error) {

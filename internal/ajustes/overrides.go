@@ -117,6 +117,15 @@ func MiParteOverride(movimientoID string, fechaISO string, montoOriginal float64
 	return nil
 }
 
+// DescripcionOverride devuelve la descripción visual asignada por el usuario,
+// o "" si el movimiento no tiene alias.
+func DescripcionOverride(movimientoID string, fechaISO string, montoOriginal float64, descripcion string, overrides []Override) string {
+	if o, ok := buscarOverride(movimientoID, fechaISO, montoOriginal, descripcion, overrides); ok {
+		return o.Descripcion
+	}
+	return ""
+}
+
 func buscarOverride(movimientoID string, fechaISO string, montoOriginal float64, descripcion string, overrides []Override) (Override, bool) {
 	if movimientoID != "" {
 		for _, o := range overrides {

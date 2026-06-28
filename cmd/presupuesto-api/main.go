@@ -14,13 +14,15 @@ import (
 	"presupuesto/internal/app/bootstrap"
 	"presupuesto/internal/cartola/fuentes"
 	"presupuesto/internal/cartola/refresh"
+	"presupuesto/internal/presentacion"
 	"presupuesto/internal/presupuesto"
 )
 
 type apiDeps struct {
-	app       *bootstrap.App
-	refresh   refreshUseCase
-	adaptador presupuesto.ProveedorFinanciero
+	app         *bootstrap.App
+	refresh     refreshUseCase
+	adaptador   presupuesto.ProveedorFinanciero
+	movimientos presentacion.Presentador
 }
 
 func main() {
@@ -71,8 +73,9 @@ func main() {
 	defer app.Close()
 
 	deps := apiDeps{
-		app:       app,
-		adaptador: app.Adaptador,
+		app:         app,
+		adaptador:   app.Adaptador,
+		movimientos: app.Movimientos,
 		refresh: refresh.CasoDeUso{
 			Scraper:     nodeScraper{Dir: "ingest", Script: "scraper.js", OutputPath: app.ProvisorioPath},
 			Fuente:      fuentes.NuevaOpenBankingChile(app.ProvisorioPath),
@@ -291,38 +294,14 @@ func (deps apiDeps) handleProjections(w http.ResponseWriter, r *http.Request) {
 }
 
 func (deps apiDeps) handleMovements(w http.ResponseWriter, r *http.Request) {
-	adaptador := deps.adaptador
-	movs, err := adaptador.ObtenerMovimientos()
+	movs, err := deps.movimientos.PresentarMovimientos()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	type MovimientoRes struct {
-		ID          string   `json:"id"`
-		Fecha       string   `json:"fecha"`
-		Descripcion string   `json:"descripcion"`
-		Monto       float64  `json:"monto"`
-		IsUSD       bool     `json:"isUsd"`
-		MiParte     *float64 `json:"miParte,omitempty"`
-		CategoriaID string   `json:"categoriaId"`
-	}
-
-	result := make([]MovimientoRes, 0, len(movs))
-	for _, m := range movs {
-		result = append(result, MovimientoRes{
-			ID:          m.ID,
-			Fecha:       m.Fecha.Format("2006-01-02"),
-			Descripcion: m.Descripcion,
-			Monto:       m.Monto,
-			IsUSD:       m.IsUSD,
-			MiParte:     m.MiParte,
-			CategoriaID: m.CategoriaID,
-		})
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(movs)
 }
 
 func (deps apiDeps) handleDivisions(w http.ResponseWriter, r *http.Request) {
