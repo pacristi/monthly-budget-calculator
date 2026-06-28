@@ -1,6 +1,8 @@
 package sqlite
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +33,17 @@ func movCuotas(fechaISO string, monto float64, desc, cuotas string) ingest.Movim
 	m := mov(fechaISO, monto, desc)
 	m.Source = "tc_nacional"
 	m.Cuotas = cuotas
+	var actual, total int
+	if _, err := fmt.Sscanf(cuotas, "%d/%d", &actual, &total); err != nil {
+		panic(err)
+	}
+	m.CuotaActual = actual
+	m.CuotasTotales = total
+	if total > 1 {
+		m.MontoRepresenta = ingest.MontoRepresentaCuota
+	} else {
+		m.MontoRepresenta = ingest.MontoRepresentaTotal
+	}
 	return m
 }
 
@@ -228,6 +241,48 @@ func TestInsertarConDedup_CompraEnCuotas_EsIdempotente(t *testing.T) {
 	}
 }
 
+func TestInsertarConDedup_CompraEnCuotas_DedupContraCuotasLegacyPersistidas(t *testing.T) {
+	w := setupDB(t)
+	f, _ := time.Parse("2006-01-02", "2025-01-07")
+
+	legacy := movCuotas("2025-01-07", -108372, "SKY AIRLINE", "01/03")
+	if err := w.insertOne(legacy, f.Format(time.RFC3339)); err != nil {
+		t.Fatalf("insert legacy: %v", err)
+	}
+
+	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "01/03"),
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "02/03"),
+		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "03/03"),
+	})
+	if err != nil {
+		t.Fatalf("InsertarConDedup: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("esperaba dedup contra fila legacy persistida, obtuve %d inserts", n)
+	}
+}
+
+func TestInsertarConDedup_CompraEnCuotas_FactsCanonicosFaltantesRetornaError(t *testing.T) {
+	w := setupDB(t)
+	f, _ := time.Parse("2006-01-02", "2025-01-07")
+	m := ingest.MovimientoBruto{
+		Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
+		Descripcion: "SKY AIRLINE", Cuotas: "01/03", CuotaActual: 1, CuotasTotales: 3,
+	}
+
+	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{m})
+	if err == nil {
+		t.Fatal("esperaba error por MontoRepresenta faltante")
+	}
+	if n != 0 {
+		t.Errorf("no debería insertar con facts canónicos incompletos, obtuvo %d", n)
+	}
+	if !strings.Contains(err.Error(), "sin MontoRepresenta") {
+		t.Errorf("error = %v, esperaba contexto de MontoRepresenta faltante", err)
+	}
+}
+
 func TestInsertarConDedup_DedupCrossSource_TCNacionalVsCreditCard(t *testing.T) {
 	w := setupDB(t)
 
@@ -238,6 +293,7 @@ func TestInsertarConDedup_DedupCrossSource_TCNacionalVsCreditCard(t *testing.T) 
 	fromXlsx := ingest.MovimientoBruto{
 		Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -20260,
 		Descripcion: "DL RAPPI CHILE RAPP LAS CONDES", Cuotas: "01/01",
+		CuotaActual: 1, CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
 	}
 	fromScraper := ingest.MovimientoBruto{
 		Banco: "bchile", Source: "credit_card_billed", Fecha: f, Monto: -20260,
@@ -287,6 +343,7 @@ func TestInsertarConDedup_CompraEnCuotas_Scraper_NoMultiplicaMonto(t *testing.T)
 	scraper := ingest.MovimientoBruto{
 		Banco: "bchile", Source: "credit_card_billed", Fecha: f,
 		Monto: -108372, Descripcion: "SKY AIRLINE", Cuotas: "1/3",
+		CuotaActual: 1, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaTotal,
 	}
 	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{scraper})
 	if err != nil {
@@ -319,11 +376,14 @@ func TestInsertarConDedup_DedupCrossSource_CompraEnCuotas(t *testing.T) {
 	f, _ := time.Parse("2006-01-02", "2025-01-07")
 	xlsxCuotas := []ingest.MovimientoBruto{
 		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
-			Descripcion: "SKY AIRLINE", Cuotas: "01/03"},
+			Descripcion: "SKY AIRLINE", Cuotas: "01/03",
+			CuotaActual: 1, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaCuota},
 		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
-			Descripcion: "SKY AIRLINE", Cuotas: "02/03"},
+			Descripcion: "SKY AIRLINE", Cuotas: "02/03",
+			CuotaActual: 2, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaCuota},
 		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
-			Descripcion: "SKY AIRLINE", Cuotas: "03/03"},
+			Descripcion: "SKY AIRLINE", Cuotas: "03/03",
+			CuotaActual: 3, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaCuota},
 	}
 	if n, _ := w.InsertarConDedup(xlsxCuotas); n != 1 {
 		t.Fatalf("inserta cuotas: esperaba 1 (total), obtuve %d", n)

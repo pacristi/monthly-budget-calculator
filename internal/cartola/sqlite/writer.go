@@ -37,13 +37,13 @@ func (w *Writer) GuardarMovimientos(batch []ingest.MovimientoBruto) (int, error)
 //
 // Trabaja en dos pasadas:
 //
-//  1. Compras en cuotas (cuota "M/N" con N>1): se agrupan por
+//  1. Compras en cuotas (CuotasTotales > 1): se agrupan por
 //     (banco, source, fecha, descripcion, N) — sin el monto, porque el
 //     banco a veces ajusta ±1 peso entre las últimas cuotas. De cada
-//     grupo se inserta UNA sola fila (la "00/N" si existe, si no la de
-//     menor M); si ya hay alguna fila con esa llave en BD, se omite.
+//     grupo se inserta UNA sola fila con el monto total de la compra; si
+//     ya hay alguna fila con esa llave en BD, se omite.
 //
-//  2. Movimientos simples (sin cuotas o "01/01"): dedup count-based por
+//  2. Movimientos simples (sin cuotas o CuotasTotales <= 1): dedup count-based por
 //     la llave clásica (banco, source, fecha, monto, descripcion). El
 //     batch puede tener M y la BD N; se inserta max(0, M-N). Cubre el
 //     caso "doble café".
@@ -71,10 +71,10 @@ func (w *Writer) InsertarConDedup(batch []ingest.MovimientoBruto) (int, error) {
 }
 
 // separarPorTipoDeCuota divide el batch en dos: filas que pertenecen a
-// una compra en N>1 cuotas y filas "simples" (sin cuotas o "01/01").
+// una compra en N>1 cuotas y filas simples.
 func separarPorTipoDeCuota(batch []ingest.MovimientoBruto) (enCuotas, simples []ingest.MovimientoBruto) {
 	for _, m := range batch {
-		if cuotaConTotalMayorAUno(m.Cuotas) {
+		if m.CuotasTotales > 1 {
 			enCuotas = append(enCuotas, m)
 		} else {
 			simples = append(simples, m)
@@ -92,12 +92,11 @@ type cuotaCompraKey struct {
 // No incluye source (mismas razones que keyOf) ni monto (ajustes ±1 peso del
 // banco).
 func cuotaKeyOf(m ingest.MovimientoBruto) cuotaCompraKey {
-	_, n, _ := parseCuotas(m.Cuotas)
 	return cuotaCompraKey{
 		banco:           m.Banco,
 		fecha:           m.Fecha.Format("2006-01-02"),
 		descripcionNorm: descripcionCanonica(m.Descripcion),
-		totalCuotas:     n,
+		totalCuotas:     m.CuotasTotales,
 	}
 }
 
@@ -118,7 +117,11 @@ func (w *Writer) insertarCompraEnCuotas(batch []ingest.MovimientoBruto, fechaCar
 		if yaExiste {
 			continue
 		}
-		representante, ok := construirRepresentanteCompra(group, w.origen)
+		representante, ok, err := construirRepresentanteCompra(group)
+		if err != nil {
+			return total, fmt.Errorf("construyendo representante compra en cuotas (%s,%s,%s,N=%d): %w",
+				k.banco, k.fecha, k.descripcionNorm, k.totalCuotas, err)
+		}
 		if !ok {
 			// Solo había filas "00/N" (informativas, sin facturar). No
 			// insertamos nada todavía; cuando aparezca al menos una cuota
@@ -138,43 +141,28 @@ func (w *Writer) insertarCompraEnCuotas(batch []ingest.MovimientoBruto, fechaCar
 // (no la cuota individual), porque el dominio divide MontoImputado entre
 // Cuotas al proyectar al mes.
 //
-// Convenciones distintas según la fuente:
-//   - xlsx: cada fila tiene monto = CUOTA individual. Total = suma de cuotas
-//     facturadas (o estimación cuota * N si solo conocemos algunas).
-//   - obchile (scraper): cada movimiento ya tiene monto = TOTAL de la compra.
-//     No se multiplica; se usa tal cual.
+// Convenciones distintas según el hecho canónico MontoRepresenta:
+//   - cuota: cada fila tiene monto = CUOTA individual. Total = suma de cuotas
+//     facturadas (o estimación promedio * N si solo conocemos algunas).
+//   - total: cada movimiento ya tiene monto = TOTAL de la compra. No se
+//     multiplica; se usa tal cual.
 //
-// Las filas "00/N" del xlsx son informativas (sin facturar) y se ignoran.
+// Las filas con CuotaActual=0 son informativas (sin facturar) y se ignoran.
 //
-// Retorna (representante, true) si pudo construirla, (zero, false) si el
-// grupo no contiene cuotas que aporten monto (todas "00/N").
-func construirRepresentanteCompra(group []ingest.MovimientoBruto, origen string) (ingest.MovimientoBruto, bool) {
-	if origen == "obchile" {
-		return representanteDesdeScraper(group)
-	}
-	return representanteDesdeXlsx(group)
-}
-
-// representanteDesdeScraper: el monto del scraper ya es el total. Cada
-// movimiento del scraper representa la compra completa; usamos el primero
-// con cuota M>=1 (las "00/N" no existen en el scraper, pero por las dudas
-// las saltamos).
-func representanteDesdeScraper(group []ingest.MovimientoBruto) (ingest.MovimientoBruto, bool) {
+// Retorna (representante, true, nil) si pudo construirla, (zero, false, nil)
+// si el grupo no contiene cuotas que aporten monto (todas CuotaActual=0).
+func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.MovimientoBruto, bool, error) {
 	for _, m := range group {
-		mNum, n, ok := parseCuotas(m.Cuotas)
-		if !ok || mNum == 0 {
+		if m.CuotaActual == 0 {
 			continue
 		}
-		base := m
-		base.Cuotas = fmt.Sprintf("00/%02d", n)
-		return base, true
+		if m.MontoRepresenta == ingest.MontoRepresentaTotal {
+			base := m
+			base.Cuotas = fmt.Sprintf("00/%02d", m.CuotasTotales)
+			return base, true, nil
+		}
 	}
-	return ingest.MovimientoBruto{}, false
-}
 
-// representanteDesdeXlsx: cada fila trae la cuota individual. Sumamos
-// las cuotas facturadas (M>=1); si tenemos K<N estimamos total = avg * N.
-func representanteDesdeXlsx(group []ingest.MovimientoBruto) (ingest.MovimientoBruto, bool) {
 	var base ingest.MovimientoBruto
 	baseM := -1
 	var sumCuotas float64
@@ -182,24 +170,27 @@ func representanteDesdeXlsx(group []ingest.MovimientoBruto) (ingest.MovimientoBr
 	var totalCuotas int
 
 	for _, m := range group {
-		mNum, n, ok := parseCuotas(m.Cuotas)
-		if !ok {
+		if m.MontoRepresenta != ingest.MontoRepresentaCuota {
+			if m.CuotaActual > 0 && m.MontoRepresenta == "" {
+				return ingest.MovimientoBruto{}, false, fmt.Errorf("movimiento en cuotas sin MontoRepresenta: fecha=%s descripcion=%q cuota=%d/%d",
+					m.Fecha.Format("2006-01-02"), m.Descripcion, m.CuotaActual, m.CuotasTotales)
+			}
 			continue
 		}
-		totalCuotas = n
-		if mNum == 0 {
+		totalCuotas = m.CuotasTotales
+		if m.CuotaActual == 0 {
 			continue // informativa, no factura
 		}
 		sumCuotas += m.Monto
 		cuotasFacturadas++
-		if baseM == -1 || mNum < baseM {
-			baseM = mNum
+		if baseM == -1 || m.CuotaActual < baseM {
+			baseM = m.CuotaActual
 			base = m
 		}
 	}
 
 	if cuotasFacturadas == 0 {
-		return ingest.MovimientoBruto{}, false
+		return ingest.MovimientoBruto{}, false, nil
 	}
 
 	var montoTotal float64
@@ -214,7 +205,7 @@ func representanteDesdeXlsx(group []ingest.MovimientoBruto) (ingest.MovimientoBr
 	// Marcamos las cuotas como "00/N" para señalar que el monto guardado
 	// es el TOTAL de la compra (convención: M=0 ↔ monto total).
 	base.Cuotas = fmt.Sprintf("00/%02d", totalCuotas)
-	return base, true
+	return base, true, nil
 }
 
 func (w *Writer) compraEnCuotasYaEnBD(k cuotaCompraKey) (bool, error) {
@@ -237,11 +228,35 @@ func (w *Writer) compraEnCuotasYaEnBD(k cuotaCompraKey) (bool, error) {
 		if descripcionCanonica(d) != k.descripcionNorm {
 			continue
 		}
-		if _, n, ok := parseCuotas(c); ok && n == k.totalCuotas {
+		if cuotaPersistidaTieneTotal(c, k.totalCuotas) {
 			return true, nil
 		}
 	}
 	return false, rows.Err()
+}
+
+func cuotaPersistidaTieneTotal(cuotas string, total int) bool {
+	if cuotas == fmt.Sprintf("00/%02d", total) {
+		return true
+	}
+	_, n, ok := parseCuotasPersistidas(cuotas)
+	return ok && n == total
+}
+
+// parseCuotasPersistidas tolera formatos legacy ya guardados en sqlite. El
+// writer no lo usa para interpretar movimientos nuevos del batch.
+func parseCuotasPersistidas(cuotas string) (m, n int, ok bool) {
+	parts := strings.Split(cuotas, "/")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	if _, err := fmt.Sscanf(parts[0], "%d", &m); err != nil {
+		return 0, 0, false
+	}
+	if _, err := fmt.Sscanf(parts[1], "%d", &n); err != nil {
+		return 0, 0, false
+	}
+	return m, n, true
 }
 
 func (w *Writer) insertarSimples(batch []ingest.MovimientoBruto, fechaCarga string) (int, error) {
@@ -266,30 +281,6 @@ func (w *Writer) insertarSimples(batch []ingest.MovimientoBruto, fechaCarga stri
 		}
 	}
 	return total, nil
-}
-
-// cuotaConTotalMayorAUno reconoce strings tipo "M/N" donde N>1, sin
-// restricción sobre M (cubre tanto la fila informativa "00/N" como las
-// cuotas facturadas "01/N", "02/N", ...).
-func cuotaConTotalMayorAUno(cuotas string) bool {
-	_, n, ok := parseCuotas(cuotas)
-	return ok && n > 1
-}
-
-// parseCuotas extrae M y N del formato "M/N". Retorna ok=false si el
-// formato no es parseable.
-func parseCuotas(cuotas string) (m, n int, ok bool) {
-	parts := strings.Split(cuotas, "/")
-	if len(parts) != 2 {
-		return 0, 0, false
-	}
-	if _, err := fmt.Sscanf(parts[0], "%d", &m); err != nil {
-		return 0, 0, false
-	}
-	if _, err := fmt.Sscanf(parts[1], "%d", &n); err != nil {
-		return 0, 0, false
-	}
-	return m, n, true
 }
 
 type dedupKey struct {
