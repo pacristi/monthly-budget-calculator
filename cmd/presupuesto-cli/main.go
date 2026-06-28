@@ -12,7 +12,7 @@ import (
 	_ "modernc.org/sqlite"
 	"presupuesto/internal/app/bootstrap"
 	"presupuesto/internal/cartola/fuentes"
-	"presupuesto/internal/cartola/ingesta"
+	"presupuesto/internal/cartola/importacion"
 	sqlitepkg "presupuesto/internal/cartola/sqlite"
 	"presupuesto/internal/presupuesto"
 )
@@ -180,7 +180,7 @@ func runIngestarOBCL(args []string) {
 	repo, cerrar := abrirRepoMovimientos(*dbPath, "obcl")
 	defer cerrar()
 
-	n, err := ingesta.DesdeFuente(fuentes.NuevaOpenBankingChile(*jsonPath), repo)
+	n, err := importacion.DesdeFuente(fuentes.NuevaOpenBankingChile(*jsonPath), repo)
 	if err != nil {
 		log.Fatalf("ingesta obcl: %v", err)
 	}
@@ -208,7 +208,7 @@ func runIngestarXlsx(args []string) {
 	repo, cerrar := abrirRepoMovimientos(*dbPath, "xlsx")
 	defer cerrar()
 
-	n, err := ingesta.DesdeFuente(fuente, repo)
+	n, err := importacion.DesdeFuente(fuente, repo)
 	if err != nil {
 		log.Fatalf("ingesta xlsx: %v", err)
 	}

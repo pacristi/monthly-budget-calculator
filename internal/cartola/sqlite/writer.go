@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode"
 
-	"presupuesto/internal/cartola/ingest"
+	"presupuesto/internal/cartola/canonico"
 )
 
 // Writer inserta MovimientoBruto en sqlite aplicando dedup count-based
@@ -29,7 +29,7 @@ func NewWriter(db *sql.DB, origen string) *Writer {
 }
 
 // GuardarMovimientos persiste movimientos canónicos en sqlite.
-func (w *Writer) GuardarMovimientos(batch []ingest.MovimientoBruto) (int, error) {
+func (w *Writer) GuardarMovimientos(batch []canonico.MovimientoBruto) (int, error) {
 	return w.InsertarConDedup(batch)
 }
 
@@ -49,7 +49,7 @@ func (w *Writer) GuardarMovimientos(batch []ingest.MovimientoBruto) (int, error)
 //     caso "doble café".
 //
 // Retorna la cantidad de filas efectivamente insertadas.
-func (w *Writer) InsertarConDedup(batch []ingest.MovimientoBruto) (int, error) {
+func (w *Writer) InsertarConDedup(batch []canonico.MovimientoBruto) (int, error) {
 	fechaCarga := time.Now().UTC().Format(time.RFC3339)
 	total := 0
 
@@ -72,7 +72,7 @@ func (w *Writer) InsertarConDedup(batch []ingest.MovimientoBruto) (int, error) {
 
 // separarPorTipoDeCuota divide el batch en dos: filas que pertenecen a
 // una compra en N>1 cuotas y filas simples.
-func separarPorTipoDeCuota(batch []ingest.MovimientoBruto) (enCuotas, simples []ingest.MovimientoBruto) {
+func separarPorTipoDeCuota(batch []canonico.MovimientoBruto) (enCuotas, simples []canonico.MovimientoBruto) {
 	for _, m := range batch {
 		if m.CuotasTotales > 1 {
 			enCuotas = append(enCuotas, m)
@@ -91,7 +91,7 @@ type cuotaCompraKey struct {
 // cuotaKeyOf agrupa por (banco, fecha, descripcion_normalizada, total_cuotas).
 // No incluye source (mismas razones que keyOf) ni monto (ajustes ±1 peso del
 // banco).
-func cuotaKeyOf(m ingest.MovimientoBruto) cuotaCompraKey {
+func cuotaKeyOf(m canonico.MovimientoBruto) cuotaCompraKey {
 	return cuotaCompraKey{
 		banco:           m.Banco,
 		fecha:           m.Fecha.Format("2006-01-02"),
@@ -100,8 +100,8 @@ func cuotaKeyOf(m ingest.MovimientoBruto) cuotaCompraKey {
 	}
 }
 
-func (w *Writer) insertarCompraEnCuotas(batch []ingest.MovimientoBruto, fechaCarga string) (int, error) {
-	grupos := map[cuotaCompraKey][]ingest.MovimientoBruto{}
+func (w *Writer) insertarCompraEnCuotas(batch []canonico.MovimientoBruto, fechaCarga string) (int, error) {
+	grupos := map[cuotaCompraKey][]canonico.MovimientoBruto{}
 	for _, m := range batch {
 		k := cuotaKeyOf(m)
 		grupos[k] = append(grupos[k], m)
@@ -151,28 +151,28 @@ func (w *Writer) insertarCompraEnCuotas(batch []ingest.MovimientoBruto, fechaCar
 //
 // Retorna (representante, true, nil) si pudo construirla, (zero, false, nil)
 // si el grupo no contiene cuotas que aporten monto (todas CuotaActual=0).
-func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.MovimientoBruto, bool, error) {
+func construirRepresentanteCompra(group []canonico.MovimientoBruto) (canonico.MovimientoBruto, bool, error) {
 	for _, m := range group {
 		if m.CuotaActual == 0 {
 			continue
 		}
-		if m.MontoRepresenta == ingest.MontoRepresentaTotal {
+		if m.MontoRepresenta == canonico.MontoRepresentaTotal {
 			base := m
 			base.Cuotas = fmt.Sprintf("00/%02d", m.CuotasTotales)
 			return base, true, nil
 		}
 	}
 
-	var base ingest.MovimientoBruto
+	var base canonico.MovimientoBruto
 	baseM := -1
 	var sumCuotas float64
 	cuotasFacturadas := 0
 	var totalCuotas int
 
 	for _, m := range group {
-		if m.MontoRepresenta != ingest.MontoRepresentaCuota {
+		if m.MontoRepresenta != canonico.MontoRepresentaCuota {
 			if m.CuotaActual > 0 && m.MontoRepresenta == "" {
-				return ingest.MovimientoBruto{}, false, fmt.Errorf("movimiento en cuotas sin MontoRepresenta: fecha=%s descripcion=%q cuota=%d/%d",
+				return canonico.MovimientoBruto{}, false, fmt.Errorf("movimiento en cuotas sin MontoRepresenta: fecha=%s descripcion=%q cuota=%d/%d",
 					m.Fecha.Format("2006-01-02"), m.Descripcion, m.CuotaActual, m.CuotasTotales)
 			}
 			continue
@@ -190,7 +190,7 @@ func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.Movimi
 	}
 
 	if cuotasFacturadas == 0 {
-		return ingest.MovimientoBruto{}, false, nil
+		return canonico.MovimientoBruto{}, false, nil
 	}
 
 	var montoTotal float64
@@ -259,7 +259,7 @@ func parseCuotasPersistidas(cuotas string) (m, n int, ok bool) {
 	return m, n, true
 }
 
-func (w *Writer) insertarSimples(batch []ingest.MovimientoBruto, fechaCarga string) (int, error) {
+func (w *Writer) insertarSimples(batch []canonico.MovimientoBruto, fechaCarga string) (int, error) {
 	grouped := groupByDedupKey(batch)
 	total := 0
 	for _, group := range grouped {
@@ -294,7 +294,7 @@ type dedupKey struct {
 // xlsx usa "cta_corriente", scraper usa "account"). La descripción se
 // normaliza con TRIM+UPPER para tolerar variaciones de casing entre
 // fuentes (xlsx en mayúsculas, scraper en Title Case).
-func keyOf(m ingest.MovimientoBruto) dedupKey {
+func keyOf(m canonico.MovimientoBruto) dedupKey {
 	return dedupKey{
 		banco:           m.Banco,
 		fecha:           m.Fecha.Format("2006-01-02"),
@@ -344,8 +344,8 @@ func DescripcionCanonicaExported(s string) string {
 	return descripcionCanonica(s)
 }
 
-func groupByDedupKey(batch []ingest.MovimientoBruto) map[dedupKey][]ingest.MovimientoBruto {
-	out := map[dedupKey][]ingest.MovimientoBruto{}
+func groupByDedupKey(batch []canonico.MovimientoBruto) map[dedupKey][]canonico.MovimientoBruto {
+	out := map[dedupKey][]canonico.MovimientoBruto{}
 	for _, m := range batch {
 		k := keyOf(m)
 		out[k] = append(out[k], m)
@@ -353,7 +353,7 @@ func groupByDedupKey(batch []ingest.MovimientoBruto) map[dedupKey][]ingest.Movim
 	return out
 }
 
-func (w *Writer) countByKey(m ingest.MovimientoBruto) (int, error) {
+func (w *Writer) countByKey(m canonico.MovimientoBruto) (int, error) {
 	// La comparación de descripción canónica se hace en Go: sqlite UPPER
 	// no normaliza caracteres unicode (UPPER("Café") devuelve "CAFé") y
 	// quedaríamos vulnerables a falsos negativos. Traemos las filas que
@@ -381,7 +381,7 @@ func (w *Writer) countByKey(m ingest.MovimientoBruto) (int, error) {
 	return count, rows.Err()
 }
 
-func (w *Writer) insertOne(m ingest.MovimientoBruto, fechaCarga string) error {
+func (w *Writer) insertOne(m canonico.MovimientoBruto, fechaCarga string) error {
 	raw := m.Raw
 	if raw == nil {
 		raw = map[string]any{}
@@ -394,7 +394,7 @@ func (w *Writer) insertOne(m ingest.MovimientoBruto, fechaCarga string) error {
 	if m.IsUSD {
 		isUSD = 1
 	}
-	if m.Instrumento == ingest.InstrumentoDesconocido {
+	if m.Instrumento == canonico.InstrumentoDesconocido {
 		return fmt.Errorf("movimiento sin Instrumento: fecha=%s descripcion=%q source=%q",
 			m.Fecha.Format("2006-01-02"), m.Descripcion, m.Source)
 	}

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"presupuesto/internal/cartola/ingest"
+	"presupuesto/internal/cartola/canonico"
 )
 
 type scraperFake struct {
@@ -19,23 +19,23 @@ func (s *scraperFake) Ejecutar() error {
 
 type fuenteFake struct {
 	llamada bool
-	movs    []ingest.MovimientoBruto
+	movs    []canonico.MovimientoBruto
 	err     error
 }
 
-func (f *fuenteFake) LeerMovimientos() ([]ingest.MovimientoBruto, error) {
+func (f *fuenteFake) LeerMovimientos() ([]canonico.MovimientoBruto, error) {
 	f.llamada = true
 	return f.movs, f.err
 }
 
 type repoFake struct {
 	llamado bool
-	movs    []ingest.MovimientoBruto
+	movs    []canonico.MovimientoBruto
 	nuevos  int
 	err     error
 }
 
-func (r *repoFake) GuardarMovimientos(movs []ingest.MovimientoBruto) (int, error) {
+func (r *repoFake) GuardarMovimientos(movs []canonico.MovimientoBruto) (int, error) {
 	r.llamado = true
 	r.movs = movs
 	return r.nuevos, r.err
@@ -64,7 +64,7 @@ func TestEjecutarSinPersistirSoloCorreScraper(t *testing.T) {
 }
 
 func TestEjecutarPersistiendoLeeFuenteYGuarda(t *testing.T) {
-	movs := []ingest.MovimientoBruto{{Descripcion: "CAFE"}}
+	movs := []canonico.MovimientoBruto{{Descripcion: "CAFE"}}
 	scraper := &scraperFake{}
 	fuente := &fuenteFake{movs: movs}
 	repo := &repoFake{nuevos: 2}

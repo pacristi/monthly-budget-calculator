@@ -1,15 +1,15 @@
-package ingesta
+package importacion
 
 import (
 	"errors"
 	"testing"
 
-	"presupuesto/internal/cartola/ingest"
+	"presupuesto/internal/cartola/canonico"
 )
 
 func TestPersistir_DelegaEnRepositorio(t *testing.T) {
 	repo := &fakeRepoMovimientos{insertados: 7}
-	batch := []ingest.MovimientoBruto{{Banco: "bchile", Descripcion: "Cafe"}}
+	batch := []canonico.MovimientoBruto{{Banco: "bchile", Descripcion: "Cafe"}}
 
 	insertados, err := Persistir(batch, repo)
 	if err != nil {
@@ -27,14 +27,14 @@ func TestPersistir_PropagaErrorDelRepositorio(t *testing.T) {
 	esperado := errors.New("repo caido")
 	repo := &fakeRepoMovimientos{err: esperado}
 
-	_, err := Persistir([]ingest.MovimientoBruto{{Banco: "bchile"}}, repo)
+	_, err := Persistir([]canonico.MovimientoBruto{{Banco: "bchile"}}, repo)
 	if !errors.Is(err, esperado) {
 		t.Fatalf("error: esperaba %v, obtuve %v", esperado, err)
 	}
 }
 
 func TestDesdeFuente_DelegaMovimientosEnRepositorio(t *testing.T) {
-	fuente := fakeFuenteMovimientos{movs: []ingest.MovimientoBruto{{Banco: "bchile", Descripcion: "Cafe"}}}
+	fuente := fakeFuenteMovimientos{movs: []canonico.MovimientoBruto{{Banco: "bchile", Descripcion: "Cafe"}}}
 	repo := &fakeRepoMovimientos{insertados: 1}
 
 	insertados, err := DesdeFuente(fuente, repo)
@@ -64,21 +64,21 @@ func TestDesdeFuente_PropagaErrorDeFuente(t *testing.T) {
 }
 
 type fakeRepoMovimientos struct {
-	recibidos  []ingest.MovimientoBruto
+	recibidos  []canonico.MovimientoBruto
 	insertados int
 	err        error
 }
 
-func (r *fakeRepoMovimientos) GuardarMovimientos(movs []ingest.MovimientoBruto) (int, error) {
-	r.recibidos = append([]ingest.MovimientoBruto(nil), movs...)
+func (r *fakeRepoMovimientos) GuardarMovimientos(movs []canonico.MovimientoBruto) (int, error) {
+	r.recibidos = append([]canonico.MovimientoBruto(nil), movs...)
 	return r.insertados, r.err
 }
 
 type fakeFuenteMovimientos struct {
-	movs []ingest.MovimientoBruto
+	movs []canonico.MovimientoBruto
 	err  error
 }
 
-func (f fakeFuenteMovimientos) LeerMovimientos() ([]ingest.MovimientoBruto, error) {
+func (f fakeFuenteMovimientos) LeerMovimientos() ([]canonico.MovimientoBruto, error) {
 	return f.movs, f.err
 }

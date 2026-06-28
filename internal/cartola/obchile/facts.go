@@ -5,17 +5,17 @@ import (
 	"strconv"
 	"strings"
 
-	"presupuesto/internal/cartola/ingest"
+	"presupuesto/internal/cartola/canonico"
 )
 
-func InstrumentoDeSource(source string) ingest.Instrumento {
+func InstrumentoDeSource(source string) canonico.Instrumento {
 	switch source {
 	case "account", "cta_corriente":
-		return ingest.InstrumentoCuentaCorriente
+		return canonico.InstrumentoCuentaCorriente
 	case "credit_card_billed", "credit_card_unbilled", "tc_nacional", "tc_internacional":
-		return ingest.InstrumentoTarjetaCredito
+		return canonico.InstrumentoTarjetaCredito
 	default:
-		return ingest.InstrumentoDesconocido
+		return canonico.InstrumentoDesconocido
 	}
 }
 
@@ -23,11 +23,11 @@ func EsProvisorio(source string) bool {
 	return strings.Contains(strings.ToLower(source), "unbilled")
 }
 
-func MonedaDeMonto(monto float64) ingest.Moneda {
+func MonedaDeMonto(monto float64) canonico.Moneda {
 	if math.Trunc(monto) != monto {
-		return ingest.MonedaUSD
+		return canonico.MonedaUSD
 	}
-	return ingest.MonedaCLP
+	return canonico.MonedaCLP
 }
 
 func CuotasDeInstallments(installments string) (actual, total int) {

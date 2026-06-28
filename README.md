@@ -124,7 +124,7 @@ go run ./cmd/presupuesto-api --proveedor sqlite --db data/movimientos.db --divis
 
 ### Limitaciones
 
-- Solo cartolas de **Banco de Chile** tienen parsers `.xls`. Otros bancos requieren implementar un parser (interfaz `ParserCartolaXLSX` en `internal/cartola/ingest/xlsx/`).
+- Solo cartolas de **Banco de Chile** tienen parsers `.xls`. Otros bancos requieren implementar un parser que produzca `canonico.MovimientoBruto`.
 - El scraper de Open Banking sí funciona con varios bancos en modo simple.
 
 ---
@@ -133,11 +133,13 @@ go run ./cmd/presupuesto-api --proveedor sqlite --db data/movimientos.db --divis
 
 Solo si quieres cargar cartolas históricas de otro banco. Pasos:
 
-1. Crear `internal/cartola/ingest/xlsx/<banco>_<tipo>.go` implementando la interfaz `ParserCartolaXLSX`.
-2. Mirar `bchile_cta_corriente.go` como referencia. El patrón:
+1. Crear un paquete bajo `internal/cartola/canonico/<banco>` que traduzca la cartola a `canonico.MovimientoBruto`.
+2. Mirar `internal/cartola/canonico/bchile/cta_corriente.go` como referencia. El patrón:
    - Capa I/O que abre el `.xls` con `extrame/xls`.
    - Capa pura que transforma filas crudas a `MovimientoBruto`.
-3. Registrar el parser en el switch de `cmd/presupuesto-cli/main.go:elegirParserXlsx`.
+3. Registrar el parser en `internal/cartola/fuentes`.
+
+Flujo de ingesta: `internal/cartola/canonico/<banco>` parsea y normaliza datos externos, `internal/cartola/importacion` orquesta lectura y guardado, y `internal/cartola/sqlite` persiste con deduplicación.
 
 PRs bienvenidas.
 

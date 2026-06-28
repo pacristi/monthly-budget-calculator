@@ -7,7 +7,7 @@ import (
 
 	"github.com/extrame/xls"
 
-	"presupuesto/internal/cartola/ingest"
+	"presupuesto/internal/cartola/canonico"
 )
 
 // TCInternacional parsea cartolas mensuales de la tarjeta de
@@ -22,7 +22,7 @@ func NewTCInternacional() *TCInternacional {
 func (p *TCInternacional) Banco() string  { return "bchile" }
 func (p *TCInternacional) Source() string { return "tc_internacional" }
 
-func (p *TCInternacional) Parsear(path string, _ int) ([]ingest.MovimientoBruto, error) {
+func (p *TCInternacional) Parsear(path string, _ int) ([]canonico.MovimientoBruto, error) {
 	filas, err := leerFilasTCI(path)
 	if err != nil {
 		return nil, fmt.Errorf("leyendo %s: %w", path, err)
@@ -75,8 +75,8 @@ func leerFilasTCI(path string) ([]filaTCI, error) {
 	return out, nil
 }
 
-func filasTCIAMovimientos(filas []filaTCI) ([]ingest.MovimientoBruto, error) {
-	var out []ingest.MovimientoBruto
+func filasTCIAMovimientos(filas []filaTCI) ([]canonico.MovimientoBruto, error) {
+	var out []canonico.MovimientoBruto
 
 	for _, f := range filas {
 		if esFilaTCIVacia(f) {
@@ -100,15 +100,15 @@ func filasTCIAMovimientos(filas []filaTCI) ([]ingest.MovimientoBruto, error) {
 			continue
 		}
 
-		out = append(out, ingest.MovimientoBruto{
+		out = append(out, canonico.MovimientoBruto{
 			Banco:           "bchile",
 			Source:          "tc_internacional",
 			Fecha:           fecha,
 			Monto:           monto,
 			Descripcion:     f.descripcion,
-			Instrumento:     ingest.InstrumentoTarjetaCredito,
-			Moneda:          ingest.MonedaUSD,
-			MontoRepresenta: ingest.MontoRepresentaTotal,
+			Instrumento:     canonico.InstrumentoTarjetaCredito,
+			Moneda:          canonico.MonedaUSD,
+			MontoRepresenta: canonico.MontoRepresentaTotal,
 			CuotaActual:     1,
 			CuotasTotales:   1,
 			IsUSD:           true,

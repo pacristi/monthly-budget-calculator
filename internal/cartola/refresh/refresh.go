@@ -1,6 +1,6 @@
 package refresh
 
-import "presupuesto/internal/cartola/ingesta"
+import "presupuesto/internal/cartola/importacion"
 
 type Scraper interface {
 	Ejecutar() error
@@ -8,8 +8,8 @@ type Scraper interface {
 
 type CasoDeUso struct {
 	Scraper     Scraper
-	Fuente      ingesta.FuenteMovimientos
-	Repositorio ingesta.RepositorioMovimientos
+	Fuente      importacion.FuenteMovimientos
+	Repositorio importacion.RepositorioMovimientos
 }
 
 func (c CasoDeUso) Ejecutar(persistir bool) (int, error) {
@@ -19,5 +19,5 @@ func (c CasoDeUso) Ejecutar(persistir bool) (int, error) {
 	if !persistir {
 		return 0, nil
 	}
-	return ingesta.DesdeFuente(c.Fuente, c.Repositorio)
+	return importacion.DesdeFuente(c.Fuente, c.Repositorio)
 }

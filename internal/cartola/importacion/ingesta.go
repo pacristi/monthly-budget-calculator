@@ -1,20 +1,20 @@
-// Package ingesta orquesta la persistencia de movimientos. Es
+// Package importacion orquesta la persistencia de movimientos. Es
 // agnóstico al banco: recibe MovimientoBruto ya canónico (lo produce el
 // paquete de cada banco) y delega el almacenamiento al repositorio recibido.
-package ingesta
+package importacion
 
 import (
-	"presupuesto/internal/cartola/ingest"
+	"presupuesto/internal/cartola/canonico"
 )
 
 // FuenteMovimientos produce movimientos canónicos desde una fuente concreta.
 type FuenteMovimientos interface {
-	LeerMovimientos() ([]ingest.MovimientoBruto, error)
+	LeerMovimientos() ([]canonico.MovimientoBruto, error)
 }
 
 // RepositorioMovimientos persiste movimientos canónicos.
 type RepositorioMovimientos interface {
-	GuardarMovimientos([]ingest.MovimientoBruto) (int, error)
+	GuardarMovimientos([]canonico.MovimientoBruto) (int, error)
 }
 
 // DesdeFuente lee una fuente de movimientos y persiste su salida canónica.
@@ -27,6 +27,6 @@ func DesdeFuente(fuente FuenteMovimientos, repo RepositorioMovimientos) (int, er
 }
 
 // Persistir vuelca los movimientos al repositorio recibido.
-func Persistir(brutos []ingest.MovimientoBruto, repo RepositorioMovimientos) (int, error) {
+func Persistir(brutos []canonico.MovimientoBruto, repo RepositorioMovimientos) (int, error) {
 	return repo.GuardarMovimientos(brutos)
 }

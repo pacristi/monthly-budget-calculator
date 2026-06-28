@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"presupuesto/internal/cartola/ingest"
+	"presupuesto/internal/cartola/canonico"
 )
 
 func setupDB(t *testing.T) *Writer {
@@ -18,25 +18,25 @@ func setupDB(t *testing.T) *Writer {
 	return NewWriter(db, "test")
 }
 
-func mov(fechaISO string, monto float64, desc string) ingest.MovimientoBruto {
+func mov(fechaISO string, monto float64, desc string) canonico.MovimientoBruto {
 	f, _ := time.Parse("2006-01-02", fechaISO)
-	return ingest.MovimientoBruto{
+	return canonico.MovimientoBruto{
 		Banco:           "bchile",
 		Source:          "cta_corriente",
 		Fecha:           f,
 		Monto:           monto,
 		Descripcion:     desc,
-		Instrumento:     ingest.InstrumentoCuentaCorriente,
-		Moneda:          ingest.MonedaCLP,
-		MontoRepresenta: ingest.MontoRepresentaTotal,
+		Instrumento:     canonico.InstrumentoCuentaCorriente,
+		Moneda:          canonico.MonedaCLP,
+		MontoRepresenta: canonico.MontoRepresentaTotal,
 		CuotasTotales:   1,
 	}
 }
 
-func movCuotas(fechaISO string, monto float64, desc, cuotas string) ingest.MovimientoBruto {
+func movCuotas(fechaISO string, monto float64, desc, cuotas string) canonico.MovimientoBruto {
 	m := mov(fechaISO, monto, desc)
 	m.Source = "tc_nacional"
-	m.Instrumento = ingest.InstrumentoTarjetaCredito
+	m.Instrumento = canonico.InstrumentoTarjetaCredito
 	m.Cuotas = cuotas
 	var actual, total int
 	if _, err := fmt.Sscanf(cuotas, "%d/%d", &actual, &total); err != nil {
@@ -45,9 +45,9 @@ func movCuotas(fechaISO string, monto float64, desc, cuotas string) ingest.Movim
 	m.CuotaActual = actual
 	m.CuotasTotales = total
 	if total > 1 {
-		m.MontoRepresenta = ingest.MontoRepresentaCuota
+		m.MontoRepresenta = canonico.MontoRepresentaCuota
 	} else {
-		m.MontoRepresenta = ingest.MontoRepresentaTotal
+		m.MontoRepresenta = canonico.MontoRepresentaTotal
 	}
 	return m
 }
@@ -55,7 +55,7 @@ func movCuotas(fechaISO string, monto float64, desc, cuotas string) ingest.Movim
 func TestInsertarConDedup_InsertSimple(t *testing.T) {
 	w := setupDB(t)
 
-	insertados, err := w.InsertarConDedup([]ingest.MovimientoBruto{
+	insertados, err := w.InsertarConDedup([]canonico.MovimientoBruto{
 		mov("2025-05-15", -1000, "Café"),
 		mov("2025-05-15", -2000, "Almuerzo"),
 	})
@@ -70,13 +70,13 @@ func TestInsertarConDedup_InsertSimple(t *testing.T) {
 func TestInsertarConDedup_PersisteFactsCanonicos(t *testing.T) {
 	w := setupDB(t)
 	f, _ := time.Parse("2006-01-02", "2025-05-15")
-	m := ingest.MovimientoBruto{
+	m := canonico.MovimientoBruto{
 		Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -1000,
-		Descripcion: "Café", Instrumento: ingest.InstrumentoTarjetaCredito,
-		Moneda: ingest.MonedaUSD, CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
+		Descripcion: "Café", Instrumento: canonico.InstrumentoTarjetaCredito,
+		Moneda: canonico.MonedaUSD, CuotasTotales: 1, MontoRepresenta: canonico.MontoRepresentaTotal,
 	}
 
-	if n, err := w.InsertarConDedup([]ingest.MovimientoBruto{m}); err != nil || n != 1 {
+	if n, err := w.InsertarConDedup([]canonico.MovimientoBruto{m}); err != nil || n != 1 {
 		t.Fatalf("InsertarConDedup: n=%d err=%v", n, err)
 	}
 
@@ -86,7 +86,7 @@ func TestInsertarConDedup_PersisteFactsCanonicos(t *testing.T) {
 		Scan(&instrumento, &moneda, &cuotasTotales); err != nil {
 		t.Fatalf("query facts: %v", err)
 	}
-	if instrumento != string(ingest.InstrumentoTarjetaCredito) || moneda != string(ingest.MonedaUSD) || cuotasTotales != 1 {
+	if instrumento != string(canonico.InstrumentoTarjetaCredito) || moneda != string(canonico.MonedaUSD) || cuotasTotales != 1 {
 		t.Fatalf("facts = (%q, %q, %d)", instrumento, moneda, cuotasTotales)
 	}
 }
@@ -94,13 +94,13 @@ func TestInsertarConDedup_PersisteFactsCanonicos(t *testing.T) {
 func TestInsertarConDedup_FactsCanonicosFaltantesRetornaError(t *testing.T) {
 	w := setupDB(t)
 	f, _ := time.Parse("2006-01-02", "2025-05-15")
-	m := ingest.MovimientoBruto{
+	m := canonico.MovimientoBruto{
 		Banco: "bchile", Source: "cta_corriente", Fecha: f, Monto: -1000,
-		Descripcion: "Café", Moneda: ingest.MonedaCLP, CuotasTotales: 1,
-		MontoRepresenta: ingest.MontoRepresentaTotal,
+		Descripcion: "Café", Moneda: canonico.MonedaCLP, CuotasTotales: 1,
+		MontoRepresenta: canonico.MontoRepresentaTotal,
 	}
 
-	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{m})
+	n, err := w.InsertarConDedup([]canonico.MovimientoBruto{m})
 	if err == nil {
 		t.Fatal("esperaba error por Instrumento faltante")
 	}
@@ -115,7 +115,7 @@ func TestInsertarConDedup_FactsCanonicosFaltantesRetornaError(t *testing.T) {
 func TestInsertarConDedup_NoDuplicaEnDosCorridas(t *testing.T) {
 	w := setupDB(t)
 
-	batch := []ingest.MovimientoBruto{
+	batch := []canonico.MovimientoBruto{
 		mov("2025-05-15", -1000, "Café"),
 		mov("2025-05-15", -2000, "Almuerzo"),
 	}
@@ -132,7 +132,7 @@ func TestInsertarConDedup_DobleCafe_InsertaDosFilas(t *testing.T) {
 	w := setupDB(t)
 
 	// Mismo (fecha, monto, descripcion) repetido — dos cafés idénticos.
-	batch := []ingest.MovimientoBruto{
+	batch := []canonico.MovimientoBruto{
 		mov("2025-05-15", -3500, "Starbucks"),
 		mov("2025-05-15", -3500, "Starbucks"),
 	}
@@ -159,14 +159,14 @@ func TestInsertarConDedup_DeltaParcial(t *testing.T) {
 	w := setupDB(t)
 
 	// Día 1: el scraper ve 1 café.
-	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{
+	if n, _ := w.InsertarConDedup([]canonico.MovimientoBruto{
 		mov("2025-05-15", -3500, "Starbucks"),
 	}); n != 1 {
 		t.Fatalf("setup día 1: esperaba 1 insert, obtuve %d", n)
 	}
 
 	// Día 2: el scraper ya ve 2 cafés. Solo debe insertar 1 (el delta).
-	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{
+	n, err := w.InsertarConDedup([]canonico.MovimientoBruto{
 		mov("2025-05-15", -3500, "Starbucks"),
 		mov("2025-05-15", -3500, "Starbucks"),
 	})
@@ -194,7 +194,7 @@ func TestInsertarConDedup_CompraEnCuotas_GuardaMontoTotal(t *testing.T) {
 	// SKY AIRLINE en 3 cuotas. En el xlsx cada fila tiene el monto de la
 	// CUOTA (no del total). Banco repite la misma fecha de origen en las 3.
 	// Esperamos: 1 fila guardada con monto = 3 × 36124 = 108372.
-	batch := []ingest.MovimientoBruto{
+	batch := []canonico.MovimientoBruto{
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "01/03"),
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "02/03"),
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "03/03"),
@@ -224,7 +224,7 @@ func TestInsertarConDedup_CompraEnCuotas_AjusteRedondeo(t *testing.T) {
 
 	// BAR ALONSO con ajuste de redondeo: 31313 + 31313 + 31314 = 93940.
 	// Cuando tenemos las N cuotas, el total es la suma exacta.
-	batch := []ingest.MovimientoBruto{
+	batch := []canonico.MovimientoBruto{
 		movCuotas("2025-02-18", -31313, "BAR ALONSO", "01/03"),
 		movCuotas("2025-02-18", -31313, "BAR ALONSO", "02/03"),
 		movCuotas("2025-02-18", -31314, "BAR ALONSO", "03/03"),
@@ -244,7 +244,7 @@ func TestInsertarConDedup_CompraEnCuotas_SoloPrimeraCuotaEstima(t *testing.T) {
 	w := setupDB(t)
 
 	// Carga parcial: sólo conocemos la cuota 1/12. Estimamos total = cuota×N.
-	batch := []ingest.MovimientoBruto{
+	batch := []canonico.MovimientoBruto{
 		movCuotas("2025-01-15", -10000, "ALGO", "01/12"),
 	}
 	if _, err := w.InsertarConDedup(batch); err != nil {
@@ -263,7 +263,7 @@ func TestInsertarConDedup_CompraEnCuotas_SoloInformativaNoInserta(t *testing.T) 
 
 	// Sólo viene la fila informativa 00/N (la compra aún no se facturó).
 	// No debemos insertar: el motor proyectaría cuotas que no existen.
-	batch := []ingest.MovimientoBruto{
+	batch := []canonico.MovimientoBruto{
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "00/03"),
 	}
 	n, err := w.InsertarConDedup(batch)
@@ -278,7 +278,7 @@ func TestInsertarConDedup_CompraEnCuotas_SoloInformativaNoInserta(t *testing.T) 
 func TestInsertarConDedup_CompraEnCuotas_EsIdempotente(t *testing.T) {
 	w := setupDB(t)
 
-	batch := []ingest.MovimientoBruto{
+	batch := []canonico.MovimientoBruto{
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "01/03"),
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "02/03"),
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "03/03"),
@@ -300,7 +300,7 @@ func TestInsertarConDedup_CompraEnCuotas_DedupContraCuotasLegacyPersistidas(t *t
 		t.Fatalf("insert legacy: %v", err)
 	}
 
-	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{
+	n, err := w.InsertarConDedup([]canonico.MovimientoBruto{
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "01/03"),
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "02/03"),
 		movCuotas("2025-01-07", -36124, "SKY AIRLINE", "03/03"),
@@ -316,12 +316,12 @@ func TestInsertarConDedup_CompraEnCuotas_DedupContraCuotasLegacyPersistidas(t *t
 func TestInsertarConDedup_CompraEnCuotas_FactsCanonicosFaltantesRetornaError(t *testing.T) {
 	w := setupDB(t)
 	f, _ := time.Parse("2006-01-02", "2025-01-07")
-	m := ingest.MovimientoBruto{
+	m := canonico.MovimientoBruto{
 		Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
 		Descripcion: "SKY AIRLINE", Cuotas: "01/03", CuotaActual: 1, CuotasTotales: 3,
 	}
 
-	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{m})
+	n, err := w.InsertarConDedup([]canonico.MovimientoBruto{m})
 	if err == nil {
 		t.Fatal("esperaba error por MontoRepresenta faltante")
 	}
@@ -340,23 +340,23 @@ func TestInsertarConDedup_DedupCrossSource_TCNacionalVsCreditCard(t *testing.T) 
 	// credit_card_billed. Misma compra, misma descripción, distinto source:
 	// debe contar como una.
 	f, _ := time.Parse("2006-01-02", "2026-04-15")
-	fromXlsx := ingest.MovimientoBruto{
+	fromXlsx := canonico.MovimientoBruto{
 		Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -20260,
 		Descripcion: "DL RAPPI CHILE RAPP LAS CONDES", Cuotas: "01/01",
-		Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
-		CuotaActual: 1, CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
+		Instrumento: canonico.InstrumentoTarjetaCredito, Moneda: canonico.MonedaCLP,
+		CuotaActual: 1, CuotasTotales: 1, MontoRepresenta: canonico.MontoRepresentaTotal,
 	}
-	fromScraper := ingest.MovimientoBruto{
+	fromScraper := canonico.MovimientoBruto{
 		Banco: "bchile", Source: "credit_card_billed", Fecha: f, Monto: -20260,
 		Descripcion: "DL RAPPI CHILE RAPP LAS CONDES", Cuotas: "",
-		Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
-		CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
+		Instrumento: canonico.InstrumentoTarjetaCredito, Moneda: canonico.MonedaCLP,
+		CuotasTotales: 1, MontoRepresenta: canonico.MontoRepresentaTotal,
 	}
 
-	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{fromXlsx}); n != 1 {
+	if n, _ := w.InsertarConDedup([]canonico.MovimientoBruto{fromXlsx}); n != 1 {
 		t.Fatalf("inserta xlsx: esperaba 1, obtuve %d", n)
 	}
-	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{fromScraper}); n != 0 {
+	if n, _ := w.InsertarConDedup([]canonico.MovimientoBruto{fromScraper}); n != 0 {
 		t.Errorf("scraper repetido: esperaba 0 nuevas, obtuve %d", n)
 	}
 }
@@ -366,23 +366,23 @@ func TestInsertarConDedup_DedupCrossSource_CtaCorrienteVsAccountConCasing(t *tes
 
 	// xlsx en mayúsculas, scraper en Title Case.
 	f, _ := time.Parse("2006-01-02", "2026-04-20")
-	upper := ingest.MovimientoBruto{
+	upper := canonico.MovimientoBruto{
 		Banco: "bchile", Source: "cta_corriente", Fecha: f, Monto: -31800,
 		Descripcion: "TRASPASO A:Bruno Cristi",
-		Instrumento: ingest.InstrumentoCuentaCorriente, Moneda: ingest.MonedaCLP,
-		CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
+		Instrumento: canonico.InstrumentoCuentaCorriente, Moneda: canonico.MonedaCLP,
+		CuotasTotales: 1, MontoRepresenta: canonico.MontoRepresentaTotal,
 	}
-	titleCase := ingest.MovimientoBruto{
+	titleCase := canonico.MovimientoBruto{
 		Banco: "bchile", Source: "account", Fecha: f, Monto: -31800,
 		Descripcion: "Traspaso A:Bruno Cristi",
-		Instrumento: ingest.InstrumentoCuentaCorriente, Moneda: ingest.MonedaCLP,
-		CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
+		Instrumento: canonico.InstrumentoCuentaCorriente, Moneda: canonico.MonedaCLP,
+		CuotasTotales: 1, MontoRepresenta: canonico.MontoRepresentaTotal,
 	}
 
-	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{upper}); n != 1 {
+	if n, _ := w.InsertarConDedup([]canonico.MovimientoBruto{upper}); n != 1 {
 		t.Fatalf("inserta xlsx: esperaba 1, obtuve %d", n)
 	}
-	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{titleCase}); n != 0 {
+	if n, _ := w.InsertarConDedup([]canonico.MovimientoBruto{titleCase}); n != 0 {
 		t.Errorf("scraper con casing distinto: esperaba 0 nuevas, obtuve %d", n)
 	}
 }
@@ -397,13 +397,13 @@ func TestInsertarConDedup_CompraEnCuotas_Scraper_NoMultiplicaMonto(t *testing.T)
 	w := NewWriter(db, "obchile")
 
 	f, _ := time.Parse("2006-01-02", "2025-01-07")
-	scraper := ingest.MovimientoBruto{
+	scraper := canonico.MovimientoBruto{
 		Banco: "bchile", Source: "credit_card_billed", Fecha: f,
 		Monto: -108372, Descripcion: "SKY AIRLINE", Cuotas: "1/3",
-		Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
-		CuotaActual: 1, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaTotal,
+		Instrumento: canonico.InstrumentoTarjetaCredito, Moneda: canonico.MonedaCLP,
+		CuotaActual: 1, CuotasTotales: 3, MontoRepresenta: canonico.MontoRepresentaTotal,
 	}
-	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{scraper})
+	n, err := w.InsertarConDedup([]canonico.MovimientoBruto{scraper})
 	if err != nil {
 		t.Fatalf("InsertarConDedup: %v", err)
 	}
@@ -432,16 +432,16 @@ func TestInsertarConDedup_DedupCrossSource_CompraEnCuotas(t *testing.T) {
 	// "01/01" pero el monto y la descripción coinciden con UNA de las
 	// cuotas guardadas como compra total — no debería duplicar.
 	f, _ := time.Parse("2006-01-02", "2025-01-07")
-	xlsxCuotas := []ingest.MovimientoBruto{
+	xlsxCuotas := []canonico.MovimientoBruto{
 		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
-			Descripcion: "SKY AIRLINE", Cuotas: "01/03", Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
-			CuotaActual: 1, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaCuota},
+			Descripcion: "SKY AIRLINE", Cuotas: "01/03", Instrumento: canonico.InstrumentoTarjetaCredito, Moneda: canonico.MonedaCLP,
+			CuotaActual: 1, CuotasTotales: 3, MontoRepresenta: canonico.MontoRepresentaCuota},
 		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
-			Descripcion: "SKY AIRLINE", Cuotas: "02/03", Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
-			CuotaActual: 2, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaCuota},
+			Descripcion: "SKY AIRLINE", Cuotas: "02/03", Instrumento: canonico.InstrumentoTarjetaCredito, Moneda: canonico.MonedaCLP,
+			CuotaActual: 2, CuotasTotales: 3, MontoRepresenta: canonico.MontoRepresentaCuota},
 		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
-			Descripcion: "SKY AIRLINE", Cuotas: "03/03", Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
-			CuotaActual: 3, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaCuota},
+			Descripcion: "SKY AIRLINE", Cuotas: "03/03", Instrumento: canonico.InstrumentoTarjetaCredito, Moneda: canonico.MonedaCLP,
+			CuotaActual: 3, CuotasTotales: 3, MontoRepresenta: canonico.MontoRepresentaCuota},
 	}
 	if n, _ := w.InsertarConDedup(xlsxCuotas); n != 1 {
 		t.Fatalf("inserta cuotas: esperaba 1 (total), obtuve %d", n)
@@ -450,13 +450,13 @@ func TestInsertarConDedup_DedupCrossSource_CompraEnCuotas(t *testing.T) {
 	// El scraper trae la misma compra como simple con monto total. La
 	// llave (banco, fecha, monto, descripcion_norm) hace match con la
 	// fila guardada (que tiene monto total 108372). No debe duplicar.
-	totalScraper := ingest.MovimientoBruto{
+	totalScraper := canonico.MovimientoBruto{
 		Banco: "bchile", Source: "credit_card_billed", Fecha: f, Monto: -108372,
 		Descripcion: "Sky Airline", // distinto casing
-		Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
-		CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
+		Instrumento: canonico.InstrumentoTarjetaCredito, Moneda: canonico.MonedaCLP,
+		CuotasTotales: 1, MontoRepresenta: canonico.MontoRepresentaTotal,
 	}
-	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{totalScraper}); n != 0 {
+	if n, _ := w.InsertarConDedup([]canonico.MovimientoBruto{totalScraper}); n != 0 {
 		t.Errorf("scraper con monto total: esperaba 0 nuevas, obtuve %d", n)
 	}
 }
