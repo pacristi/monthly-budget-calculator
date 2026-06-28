@@ -19,6 +19,10 @@ func InstrumentoDeSource(source string) ingest.Instrumento {
 	}
 }
 
+func EsProvisorio(source string) bool {
+	return strings.Contains(strings.ToLower(source), "unbilled")
+}
+
 func MonedaDeMonto(monto float64) ingest.Moneda {
 	if math.Trunc(monto) != monto {
 		return ingest.MonedaUSD
