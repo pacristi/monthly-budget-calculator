@@ -14,6 +14,7 @@ import (
 	"presupuesto/internal/app/bootstrap"
 	"presupuesto/internal/cartola/fuentes"
 	"presupuesto/internal/cartola/refresh"
+	"presupuesto/internal/presentacion"
 	"presupuesto/internal/presupuesto"
 )
 
@@ -298,28 +299,13 @@ func (deps apiDeps) handleMovements(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type MovimientoRes struct {
-		ID          string   `json:"id"`
-		Fecha       string   `json:"fecha"`
-		Descripcion string   `json:"descripcion"`
-		Monto       float64  `json:"monto"`
-		IsUSD       bool     `json:"isUsd"`
-		MiParte     *float64 `json:"miParte,omitempty"`
-		CategoriaID string   `json:"categoriaId"`
+	overrides, err := ajustes.LeerOverrides(deps.app.DivisionesPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
-	result := make([]MovimientoRes, 0, len(movs))
-	for _, m := range movs {
-		result = append(result, MovimientoRes{
-			ID:          m.ID,
-			Fecha:       m.Fecha.Format("2006-01-02"),
-			Descripcion: m.Descripcion,
-			Monto:       m.Monto,
-			IsUSD:       m.IsUSD,
-			MiParte:     m.MiParte,
-			CategoriaID: m.CategoriaID,
-		})
-	}
+	result := presentacion.Movimientos(movs, overrides)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)

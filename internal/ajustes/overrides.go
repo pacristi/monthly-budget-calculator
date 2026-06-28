@@ -117,6 +117,11 @@ func MiParteOverride(movimientoID string, fechaISO string, montoOriginal float64
 	return nil
 }
 
+// BuscarOverride devuelve el ajuste del usuario para un movimiento, si existe.
+func BuscarOverride(movimientoID string, fechaISO string, montoOriginal float64, descripcion string, overrides []Override) (Override, bool) {
+	return buscarOverride(movimientoID, fechaISO, montoOriginal, descripcion, overrides)
+}
+
 func buscarOverride(movimientoID string, fechaISO string, montoOriginal float64, descripcion string, overrides []Override) (Override, bool) {
 	if movimientoID != "" {
 		for _, o := range overrides {
