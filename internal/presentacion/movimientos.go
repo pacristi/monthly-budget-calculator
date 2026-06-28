@@ -36,8 +36,8 @@ func Movimientos(movs []presupuesto.Movimiento, overrides []ajustes.Override) []
 
 func descripcionMovimiento(m presupuesto.Movimiento, overrides []ajustes.Override) string {
 	fechaISO := m.Fecha.Format("2006-01-02")
-	if o, ok := ajustes.BuscarOverride(m.ID, fechaISO, m.Monto, m.Descripcion, overrides); ok && o.Descripcion != "" {
-		return o.Descripcion
+	if desc := ajustes.DescripcionOverride(m.ID, fechaISO, m.Monto, m.Descripcion, overrides); desc != "" {
+		return desc
 	}
 	return m.Descripcion
 }

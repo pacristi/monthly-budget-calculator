@@ -5,7 +5,10 @@
 // merge es una concatenación sin riesgo de doble conteo.
 package compuesto
 
-import "presupuesto/internal/presupuesto"
+import (
+	"presupuesto/internal/presentacion"
+	"presupuesto/internal/presupuesto"
+)
 
 // Adapter compone una capa liquidada y una provisoria.
 type Adapter struct {
@@ -66,4 +69,32 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 	out = append(out, liq...)
 	out = append(out, prov...)
 	return out, nil
+}
+
+func (a *Adapter) PresentarMovimientos() ([]presentacion.Movimiento, error) {
+	liq, err := presentarMovimientos(a.liquidado)
+	if err != nil {
+		return nil, err
+	}
+	prov, err := presentarMovimientos(a.provisorio)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]presentacion.Movimiento, 0, len(liq)+len(prov))
+	out = append(out, liq...)
+	out = append(out, prov...)
+	return out, nil
+}
+
+func presentarMovimientos(proveedor presupuesto.ProveedorFinanciero) ([]presentacion.Movimiento, error) {
+	if p, ok := proveedor.(interface {
+		PresentarMovimientos() ([]presentacion.Movimiento, error)
+	}); ok {
+		return p.PresentarMovimientos()
+	}
+	movs, err := proveedor.ObtenerMovimientos()
+	if err != nil {
+		return nil, err
+	}
+	return presentacion.Movimientos(movs, nil), nil
 }

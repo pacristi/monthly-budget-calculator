@@ -24,6 +24,10 @@ type apiDeps struct {
 	adaptador presupuesto.ProveedorFinanciero
 }
 
+type presentadorMovimientos interface {
+	PresentarMovimientos() ([]presentacion.Movimiento, error)
+}
+
 func main() {
 	_ = godotenv.Load()
 
@@ -292,23 +296,19 @@ func (deps apiDeps) handleProjections(w http.ResponseWriter, r *http.Request) {
 }
 
 func (deps apiDeps) handleMovements(w http.ResponseWriter, r *http.Request) {
-	adaptador := deps.adaptador
-	movs, err := adaptador.ObtenerMovimientos()
+	presentador, ok := deps.adaptador.(presentadorMovimientos)
+	if !ok {
+		http.Error(w, "adaptador sin vista de movimientos", http.StatusInternalServerError)
+		return
+	}
+	movs, err := presentador.PresentarMovimientos()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	overrides, err := ajustes.LeerOverrides(deps.app.DivisionesPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	result := presentacion.Movimientos(movs, overrides)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(movs)
 }
 
 func (deps apiDeps) handleDivisions(w http.ResponseWriter, r *http.Request) {
