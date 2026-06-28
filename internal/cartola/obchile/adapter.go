@@ -53,7 +53,7 @@ func NewAdapterProvisorio(rutaJson, rutaDivisiones string, reglas []presupuesto.
 		overrides:    overrides,
 		reglas:       reglas,
 		resolvedor:   resolvedor,
-		filtroSource: shared.EsProvisorio,
+		filtroSource: EsProvisorio,
 	}
 }
 
@@ -119,13 +119,12 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 		// 4. Determinar política de corte (día de corte del mes del movimiento)
 		tipoPago := presupuesto.Debito
 		diaCorte := 0
-		sourceLower := strings.ToLower(mov.Source)
-		if strings.Contains(sourceLower, "credito") || strings.Contains(sourceLower, "credit_card") {
+		if InstrumentoDeSource(mov.Source) == ingest.InstrumentoTarjetaCredito {
 			tipoPago = presupuesto.Credito
 			diaCorte = cfg.DiaDeCorteCredito
 		}
 
-		cuotas := shared.ParsearCuotas(mov.Installments)
+		_, cuotas := CuotasDeInstallments(mov.Installments)
 
 		gastos = append(gastos, presupuesto.Gasto{
 			ID:               fmt.Sprintf("mov-%s-%d", fechaTransaccion.Format("20060102"), i),

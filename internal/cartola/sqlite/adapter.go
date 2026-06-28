@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"presupuesto/internal/ajustes"
+	"presupuesto/internal/cartola/ingest"
 	"presupuesto/internal/cartola/shared"
 	"presupuesto/internal/presupuesto"
 )
@@ -134,11 +135,11 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 		}
 
 		montoCrudo := ajustes.AplicarOverrides(movimientoID, monto, fechaISO, descripcion, a.overrides)
-		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, moneda == "USD", cfg.TasaCambioUSD))
+		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, ingest.Moneda(moneda) == ingest.MonedaUSD, cfg.TasaCambioUSD))
 
 		tipo := presupuesto.Debito
 		diaCorte := 0
-		if instrumento == "tarjeta_credito" {
+		if ingest.Instrumento(instrumento) == ingest.InstrumentoTarjetaCredito {
 			tipo = presupuesto.Credito
 			diaCorte = cfg.DiaDeCorteCredito
 		}
