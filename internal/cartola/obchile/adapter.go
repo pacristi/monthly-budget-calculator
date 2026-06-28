@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"presupuesto/internal/ajustes"
+	"presupuesto/internal/cartola/ingest"
 	"presupuesto/internal/cartola/shared"
 	"presupuesto/internal/presupuesto"
 )
@@ -111,8 +112,9 @@ func (a *Adapter) ObtenerGastosValidos(periodo presupuesto.PeriodoPresupuestario
 		}
 
 		// 4. Aplicar override (en cruda) y luego normalizar a CLP con tasa del mes
+		esUSD := MonedaDeMonto(mov.Monto) == ingest.MonedaUSD
 		montoCrudo := ajustes.AplicarOverrides("", mov.Monto, fechaISO, mov.Descripcion, a.overrides)
-		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, cfg.TasaCambioUSD))
+		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, esUSD, cfg.TasaCambioUSD))
 
 		// 4. Determinar política de corte (día de corte del mes del movimiento)
 		tipoPago := presupuesto.Debito

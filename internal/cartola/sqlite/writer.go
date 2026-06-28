@@ -394,11 +394,23 @@ func (w *Writer) insertOne(m ingest.MovimientoBruto, fechaCarga string) error {
 	if m.IsUSD {
 		isUSD = 1
 	}
+	if m.Instrumento == ingest.InstrumentoDesconocido {
+		return fmt.Errorf("movimiento sin Instrumento: fecha=%s descripcion=%q source=%q",
+			m.Fecha.Format("2006-01-02"), m.Descripcion, m.Source)
+	}
+	if m.Moneda == "" {
+		return fmt.Errorf("movimiento sin Moneda: fecha=%s descripcion=%q source=%q",
+			m.Fecha.Format("2006-01-02"), m.Descripcion, m.Source)
+	}
+	if m.CuotasTotales <= 0 {
+		return fmt.Errorf("movimiento con CuotasTotales inválido: fecha=%s descripcion=%q source=%q cuotas_totales=%d",
+			m.Fecha.Format("2006-01-02"), m.Descripcion, m.Source, m.CuotasTotales)
+	}
 	_, err = w.db.Exec(`INSERT INTO movimientos
-		(banco, source, fecha, monto, descripcion, is_usd, cuotas, raw, origen, fecha_carga)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(banco, source, fecha, monto, descripcion, is_usd, cuotas, raw, origen, fecha_carga, instrumento, moneda, cuotas_totales)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Banco, m.Source, m.Fecha.Format("2006-01-02"), m.Monto, m.Descripcion,
-		isUSD, m.Cuotas, string(rawJSON), w.origen, fechaCarga,
+		isUSD, m.Cuotas, string(rawJSON), w.origen, fechaCarga, string(m.Instrumento), string(m.Moneda), m.CuotasTotales,
 	)
 	return err
 }

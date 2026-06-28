@@ -21,17 +21,22 @@ func setupDB(t *testing.T) *Writer {
 func mov(fechaISO string, monto float64, desc string) ingest.MovimientoBruto {
 	f, _ := time.Parse("2006-01-02", fechaISO)
 	return ingest.MovimientoBruto{
-		Banco:       "bchile",
-		Source:      "cta_corriente",
-		Fecha:       f,
-		Monto:       monto,
-		Descripcion: desc,
+		Banco:           "bchile",
+		Source:          "cta_corriente",
+		Fecha:           f,
+		Monto:           monto,
+		Descripcion:     desc,
+		Instrumento:     ingest.InstrumentoCuentaCorriente,
+		Moneda:          ingest.MonedaCLP,
+		MontoRepresenta: ingest.MontoRepresentaTotal,
+		CuotasTotales:   1,
 	}
 }
 
 func movCuotas(fechaISO string, monto float64, desc, cuotas string) ingest.MovimientoBruto {
 	m := mov(fechaISO, monto, desc)
 	m.Source = "tc_nacional"
+	m.Instrumento = ingest.InstrumentoTarjetaCredito
 	m.Cuotas = cuotas
 	var actual, total int
 	if _, err := fmt.Sscanf(cuotas, "%d/%d", &actual, &total); err != nil {
@@ -59,6 +64,51 @@ func TestInsertarConDedup_InsertSimple(t *testing.T) {
 	}
 	if insertados != 2 {
 		t.Errorf("esperaba 2 insertados, obtuve %d", insertados)
+	}
+}
+
+func TestInsertarConDedup_PersisteFactsCanonicos(t *testing.T) {
+	w := setupDB(t)
+	f, _ := time.Parse("2006-01-02", "2025-05-15")
+	m := ingest.MovimientoBruto{
+		Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -1000,
+		Descripcion: "Café", Instrumento: ingest.InstrumentoTarjetaCredito,
+		Moneda: ingest.MonedaUSD, CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
+	}
+
+	if n, err := w.InsertarConDedup([]ingest.MovimientoBruto{m}); err != nil || n != 1 {
+		t.Fatalf("InsertarConDedup: n=%d err=%v", n, err)
+	}
+
+	var instrumento, moneda string
+	var cuotasTotales int
+	if err := w.db.QueryRow(`SELECT instrumento, moneda, cuotas_totales FROM movimientos WHERE descripcion = 'Café'`).
+		Scan(&instrumento, &moneda, &cuotasTotales); err != nil {
+		t.Fatalf("query facts: %v", err)
+	}
+	if instrumento != string(ingest.InstrumentoTarjetaCredito) || moneda != string(ingest.MonedaUSD) || cuotasTotales != 1 {
+		t.Fatalf("facts = (%q, %q, %d)", instrumento, moneda, cuotasTotales)
+	}
+}
+
+func TestInsertarConDedup_FactsCanonicosFaltantesRetornaError(t *testing.T) {
+	w := setupDB(t)
+	f, _ := time.Parse("2006-01-02", "2025-05-15")
+	m := ingest.MovimientoBruto{
+		Banco: "bchile", Source: "cta_corriente", Fecha: f, Monto: -1000,
+		Descripcion: "Café", Moneda: ingest.MonedaCLP, CuotasTotales: 1,
+		MontoRepresenta: ingest.MontoRepresentaTotal,
+	}
+
+	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{m})
+	if err == nil {
+		t.Fatal("esperaba error por Instrumento faltante")
+	}
+	if n != 0 {
+		t.Errorf("no debería insertar con facts canónicos incompletos, obtuvo %d", n)
+	}
+	if !strings.Contains(err.Error(), "sin Instrumento") {
+		t.Errorf("error = %v, esperaba contexto de Instrumento faltante", err)
 	}
 }
 
@@ -293,11 +343,14 @@ func TestInsertarConDedup_DedupCrossSource_TCNacionalVsCreditCard(t *testing.T) 
 	fromXlsx := ingest.MovimientoBruto{
 		Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -20260,
 		Descripcion: "DL RAPPI CHILE RAPP LAS CONDES", Cuotas: "01/01",
+		Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
 		CuotaActual: 1, CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
 	}
 	fromScraper := ingest.MovimientoBruto{
 		Banco: "bchile", Source: "credit_card_billed", Fecha: f, Monto: -20260,
 		Descripcion: "DL RAPPI CHILE RAPP LAS CONDES", Cuotas: "",
+		Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
+		CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
 	}
 
 	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{fromXlsx}); n != 1 {
@@ -316,10 +369,14 @@ func TestInsertarConDedup_DedupCrossSource_CtaCorrienteVsAccountConCasing(t *tes
 	upper := ingest.MovimientoBruto{
 		Banco: "bchile", Source: "cta_corriente", Fecha: f, Monto: -31800,
 		Descripcion: "TRASPASO A:Bruno Cristi",
+		Instrumento: ingest.InstrumentoCuentaCorriente, Moneda: ingest.MonedaCLP,
+		CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
 	}
 	titleCase := ingest.MovimientoBruto{
 		Banco: "bchile", Source: "account", Fecha: f, Monto: -31800,
 		Descripcion: "Traspaso A:Bruno Cristi",
+		Instrumento: ingest.InstrumentoCuentaCorriente, Moneda: ingest.MonedaCLP,
+		CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
 	}
 
 	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{upper}); n != 1 {
@@ -343,6 +400,7 @@ func TestInsertarConDedup_CompraEnCuotas_Scraper_NoMultiplicaMonto(t *testing.T)
 	scraper := ingest.MovimientoBruto{
 		Banco: "bchile", Source: "credit_card_billed", Fecha: f,
 		Monto: -108372, Descripcion: "SKY AIRLINE", Cuotas: "1/3",
+		Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
 		CuotaActual: 1, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaTotal,
 	}
 	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{scraper})
@@ -376,13 +434,13 @@ func TestInsertarConDedup_DedupCrossSource_CompraEnCuotas(t *testing.T) {
 	f, _ := time.Parse("2006-01-02", "2025-01-07")
 	xlsxCuotas := []ingest.MovimientoBruto{
 		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
-			Descripcion: "SKY AIRLINE", Cuotas: "01/03",
+			Descripcion: "SKY AIRLINE", Cuotas: "01/03", Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
 			CuotaActual: 1, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaCuota},
 		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
-			Descripcion: "SKY AIRLINE", Cuotas: "02/03",
+			Descripcion: "SKY AIRLINE", Cuotas: "02/03", Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
 			CuotaActual: 2, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaCuota},
 		{Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -36124,
-			Descripcion: "SKY AIRLINE", Cuotas: "03/03",
+			Descripcion: "SKY AIRLINE", Cuotas: "03/03", Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
 			CuotaActual: 3, CuotasTotales: 3, MontoRepresenta: ingest.MontoRepresentaCuota},
 	}
 	if n, _ := w.InsertarConDedup(xlsxCuotas); n != 1 {
@@ -395,6 +453,8 @@ func TestInsertarConDedup_DedupCrossSource_CompraEnCuotas(t *testing.T) {
 	totalScraper := ingest.MovimientoBruto{
 		Banco: "bchile", Source: "credit_card_billed", Fecha: f, Monto: -108372,
 		Descripcion: "Sky Airline", // distinto casing
+		Instrumento: ingest.InstrumentoTarjetaCredito, Moneda: ingest.MonedaCLP,
+		CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
 	}
 	if n, _ := w.InsertarConDedup([]ingest.MovimientoBruto{totalScraper}); n != 0 {
 		t.Errorf("scraper con monto total: esperaba 0 nuevas, obtuve %d", n)

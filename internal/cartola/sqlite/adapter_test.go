@@ -42,15 +42,19 @@ func setupAdapterDB(t *testing.T) *sql.DB {
 }
 
 func insertarMov(t *testing.T, db *sql.DB, fecha string, monto float64, desc, source string, isUSD bool, cuotas string) {
+	insertarMovCanonico(t, db, fecha, monto, desc, source, isUSD, cuotas, "cuenta_corriente", "CLP", 1)
+}
+
+func insertarMovCanonico(t *testing.T, db *sql.DB, fecha string, monto float64, desc, source string, isUSD bool, cuotas, instrumento, moneda string, cuotasTotales int) {
 	t.Helper()
 	isUSDInt := 0
 	if isUSD {
 		isUSDInt = 1
 	}
 	_, err := db.Exec(`INSERT INTO movimientos
-		(banco, source, fecha, monto, descripcion, is_usd, cuotas, raw, origen, fecha_carga)
-		VALUES ('bchile', ?, ?, ?, ?, ?, ?, '{}', 'test', '2026-05-15T00:00:00Z')`,
-		source, fecha, monto, desc, isUSDInt, cuotas)
+		(banco, source, fecha, monto, descripcion, is_usd, cuotas, raw, origen, fecha_carga, instrumento, moneda, cuotas_totales)
+		VALUES ('bchile', ?, ?, ?, ?, ?, ?, '{}', 'test', '2026-05-15T00:00:00Z', ?, ?, ?)`,
+		source, fecha, monto, desc, isUSDInt, cuotas, instrumento, moneda, cuotasTotales)
 	if err != nil {
 		t.Fatalf("insert: %v", err)
 	}
@@ -63,8 +67,8 @@ func insertarMovID(t *testing.T, db *sql.DB, fecha string, monto float64, desc, 
 		isUSDInt = 1
 	}
 	res, err := db.Exec(`INSERT INTO movimientos
-		(banco, source, fecha, monto, descripcion, is_usd, cuotas, raw, origen, fecha_carga)
-		VALUES ('bchile', ?, ?, ?, ?, ?, ?, '{}', 'test', '2026-05-15T00:00:00Z')`,
+		(banco, source, fecha, monto, descripcion, is_usd, cuotas, raw, origen, fecha_carga, instrumento, moneda, cuotas_totales)
+		VALUES ('bchile', ?, ?, ?, ?, ?, ?, '{}', 'test', '2026-05-15T00:00:00Z', 'cuenta_corriente', 'CLP', 1)`,
 		source, fecha, monto, desc, isUSDInt, cuotas)
 	if err != nil {
 		t.Fatalf("insert: %v", err)
@@ -173,17 +177,16 @@ func TestAdapter_ObtenerGastosValidos_FiltraAbonosYIgnorables(t *testing.T) {
 	}
 }
 
-func TestAdapter_ObtenerGastosValidos_DetectaCreditoPorSource(t *testing.T) {
+func TestAdapter_ObtenerGastosValidos_UsaInstrumentoCanonico(t *testing.T) {
 	db := setupAdapterDB(t)
-	insertarMov(t, db, "2026-05-10", -10000, "DEBITO", "cta_corriente", false, "")
-	insertarMov(t, db, "2026-05-10", -20000, "CREDITO BCHL", "tc_nacional", false, "01/01")
-	insertarMov(t, db, "2026-05-10", -5000, "USD COMPRA", "tc_internacional", true, "")
+	insertarMovCanonico(t, db, "2026-05-10", -10000, "SOURCE ENGAÑOSO", "tc_nacional", false, "", "cuenta_corriente", "CLP", 1)
+	insertarMovCanonico(t, db, "2026-05-10", -20000, "CREDITO CANONICO", "cta_corriente", false, "01/03", "tarjeta_credito", "CLP", 3)
 
 	a := NewAdapter(db, "", nil, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	gastos, _ := a.ObtenerGastosValidos(periodoMayo2026())
 
-	if len(gastos) != 3 {
-		t.Fatalf("esperaba 3, obtuve %d", len(gastos))
+	if len(gastos) != 2 {
+		t.Fatalf("esperaba 2, obtuve %d", len(gastos))
 	}
 
 	porDesc := map[string]presupuesto.Gasto{}
@@ -191,26 +194,26 @@ func TestAdapter_ObtenerGastosValidos_DetectaCreditoPorSource(t *testing.T) {
 		porDesc[g.Descripcion] = g
 	}
 
-	if porDesc["DEBITO"].PoliticaCorte.Tipo != presupuesto.Debito {
-		t.Error("DEBITO no quedó como débito")
+	if porDesc["SOURCE ENGAÑOSO"].PoliticaCorte.Tipo != presupuesto.Debito {
+		t.Error("source tc_nacional no debería volver crédito si instrumento dice cuenta_corriente")
 	}
-	if porDesc["CREDITO BCHL"].PoliticaCorte.Tipo != presupuesto.Credito {
-		t.Error("CREDITO BCHL no quedó como crédito")
+	if porDesc["CREDITO CANONICO"].PoliticaCorte.Tipo != presupuesto.Credito {
+		t.Error("instrumento tarjeta_credito no quedó como crédito")
 	}
-	if porDesc["USD COMPRA"].PoliticaCorte.Tipo != presupuesto.Credito {
-		t.Error("tc_internacional no quedó como crédito")
-	}
-	if porDesc["DEBITO"].PoliticaCorte.DiaDeCorte != 0 {
+	if porDesc["SOURCE ENGAÑOSO"].PoliticaCorte.DiaDeCorte != 0 {
 		t.Error("débito no debería tener día de corte")
 	}
-	if porDesc["CREDITO BCHL"].PoliticaCorte.DiaDeCorte != 22 {
-		t.Errorf("crédito día de corte: esperaba 22, obtuve %d", porDesc["CREDITO BCHL"].PoliticaCorte.DiaDeCorte)
+	if porDesc["CREDITO CANONICO"].PoliticaCorte.DiaDeCorte != 22 {
+		t.Errorf("crédito día de corte: esperaba 22, obtuve %d", porDesc["CREDITO CANONICO"].PoliticaCorte.DiaDeCorte)
+	}
+	if porDesc["CREDITO CANONICO"].Cuotas != 3 {
+		t.Errorf("cuotas: esperaba 3, obtuve %d", porDesc["CREDITO CANONICO"].Cuotas)
 	}
 }
 
 func TestAdapter_ObtenerGastosValidos_NormalizaUSD(t *testing.T) {
 	db := setupAdapterDB(t)
-	insertarMov(t, db, "2026-05-10", -10.5, "USD COMPRA", "tc_internacional", true, "")
+	insertarMovCanonico(t, db, "2026-05-10", -10.5, "USD COMPRA", "tc_internacional", true, "", "tarjeta_credito", "USD", 1)
 
 	a := NewAdapter(db, "", nil, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
 	gastos, _ := a.ObtenerGastosValidos(periodoMayo2026())
@@ -220,6 +223,20 @@ func TestAdapter_ObtenerGastosValidos_NormalizaUSD(t *testing.T) {
 	// |−10.5 * 950| = 9975
 	if gastos[0].MontoImputado != 9975 {
 		t.Errorf("USD normalizado: esperaba 9975, obtuve %v", gastos[0].MontoImputado)
+	}
+}
+
+func TestAdapter_ObtenerGastosValidos_CLPDecimalNoSeConviertePorHeuristica(t *testing.T) {
+	db := setupAdapterDB(t)
+	insertarMovCanonico(t, db, "2026-05-10", -10.5, "MI PARTE CLP", "cta_corriente", false, "", "cuenta_corriente", "CLP", 1)
+
+	a := NewAdapter(db, "", nil, "", "", fakeResolvedor{tasaUSD: 950, diaCorteCC: 22, porcGastos: 0.5})
+	gastos, _ := a.ObtenerGastosValidos(periodoMayo2026())
+	if len(gastos) != 1 {
+		t.Fatalf("esperaba 1, obtuve %d", len(gastos))
+	}
+	if gastos[0].MontoImputado != 10.5 {
+		t.Errorf("CLP decimal no debe convertirse por tasa: esperaba 10.5, obtuve %v", gastos[0].MontoImputado)
 	}
 }
 
