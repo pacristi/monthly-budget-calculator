@@ -62,6 +62,30 @@ func TestInsertarConDedup_InsertSimple(t *testing.T) {
 	}
 }
 
+func TestInsertarConDedup_PersisteFactsCanonicos(t *testing.T) {
+	w := setupDB(t)
+	f, _ := time.Parse("2006-01-02", "2025-05-15")
+	m := ingest.MovimientoBruto{
+		Banco: "bchile", Source: "tc_nacional", Fecha: f, Monto: -1000,
+		Descripcion: "Café", Instrumento: ingest.InstrumentoTarjetaCredito,
+		Moneda: ingest.MonedaUSD, CuotasTotales: 1, MontoRepresenta: ingest.MontoRepresentaTotal,
+	}
+
+	if n, err := w.InsertarConDedup([]ingest.MovimientoBruto{m}); err != nil || n != 1 {
+		t.Fatalf("InsertarConDedup: n=%d err=%v", n, err)
+	}
+
+	var instrumento, moneda string
+	var cuotasTotales int
+	if err := w.db.QueryRow(`SELECT instrumento, moneda, cuotas_totales FROM movimientos WHERE descripcion = 'Café'`).
+		Scan(&instrumento, &moneda, &cuotasTotales); err != nil {
+		t.Fatalf("query facts: %v", err)
+	}
+	if instrumento != string(ingest.InstrumentoTarjetaCredito) || moneda != string(ingest.MonedaUSD) || cuotasTotales != 1 {
+		t.Fatalf("facts = (%q, %q, %d)", instrumento, moneda, cuotasTotales)
+	}
+}
+
 func TestInsertarConDedup_NoDuplicaEnDosCorridas(t *testing.T) {
 	w := setupDB(t)
 

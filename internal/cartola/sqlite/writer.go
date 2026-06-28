@@ -394,11 +394,23 @@ func (w *Writer) insertOne(m ingest.MovimientoBruto, fechaCarga string) error {
 	if m.IsUSD {
 		isUSD = 1
 	}
+	instrumento := m.Instrumento
+	if instrumento == ingest.InstrumentoDesconocido {
+		instrumento = ingest.InstrumentoCuentaCorriente
+	}
+	moneda := m.Moneda
+	if moneda == "" {
+		moneda = ingest.MonedaCLP
+	}
+	cuotasTotales := m.CuotasTotales
+	if cuotasTotales <= 0 {
+		cuotasTotales = 1
+	}
 	_, err = w.db.Exec(`INSERT INTO movimientos
-		(banco, source, fecha, monto, descripcion, is_usd, cuotas, raw, origen, fecha_carga)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(banco, source, fecha, monto, descripcion, is_usd, cuotas, raw, origen, fecha_carga, instrumento, moneda, cuotas_totales)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Banco, m.Source, m.Fecha.Format("2006-01-02"), m.Monto, m.Descripcion,
-		isUSD, m.Cuotas, string(rawJSON), w.origen, fechaCarga,
+		isUSD, m.Cuotas, string(rawJSON), w.origen, fechaCarga, string(instrumento), string(moneda), cuotasTotales,
 	)
 	return err
 }

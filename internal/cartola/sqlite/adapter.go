@@ -95,10 +95,10 @@ func (a *Adapter) buscarSueldoEnRango(ini, fin time.Time) (float64, bool, error)
 
 // ObtenerGastosValidos lee TODOS los movimientos con monto < 0 (cargos),
 // excluye ignorables, aplica overrides y normalización USD, y los
-// devuelve como Gasto. La política de corte (débito/crédito y día) se
-// deriva del source. Suma también los gastos manuales del JSON.
+// devuelve como Gasto. La política de corte usa el instrumento canónico
+// persistido. Suma también los gastos manuales del JSON.
 func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]presupuesto.Gasto, error) {
-	rows, err := a.db.Query(`SELECT id, fecha, monto, descripcion, source, is_usd, cuotas
+	rows, err := a.db.Query(`SELECT id, fecha, monto, descripcion, instrumento, moneda, cuotas_totales
 		FROM movimientos WHERE monto < 0 ORDER BY fecha ASC, id ASC`)
 	if err != nil {
 		return nil, err
@@ -108,10 +108,10 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 	var gastos []presupuesto.Gasto
 	for rows.Next() {
 		var id int
-		var fechaISO, descripcion, source, cuotasStr string
+		var fechaISO, descripcion, instrumento, moneda string
 		var monto float64
-		var isUSDInt int
-		if err := rows.Scan(&id, &fechaISO, &monto, &descripcion, &source, &isUSDInt, &cuotasStr); err != nil {
+		var cuotasTotales int
+		if err := rows.Scan(&id, &fechaISO, &monto, &descripcion, &instrumento, &moneda, &cuotasTotales); err != nil {
 			return nil, err
 		}
 		fechaTransaccion, err := time.Parse("2006-01-02", fechaISO)
@@ -134,11 +134,11 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 		}
 
 		montoCrudo := ajustes.AplicarOverrides(movimientoID, monto, fechaISO, descripcion, a.overrides)
-		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, cfg.TasaCambioUSD))
+		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, moneda == "USD", cfg.TasaCambioUSD))
 
 		tipo := presupuesto.Debito
 		diaCorte := 0
-		if esCredito(source) {
+		if instrumento == "tarjeta_credito" {
 			tipo = presupuesto.Credito
 			diaCorte = cfg.DiaDeCorteCredito
 		}
@@ -147,7 +147,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 			ID:               movimientoID,
 			Descripcion:      descripcion,
 			MontoImputado:    montoImputado,
-			Cuotas:           shared.ParsearCuotas(cuotasStr),
+			Cuotas:           cuotasTotales,
 			FechaTransaccion: fechaTransaccion,
 			PoliticaCorte: presupuesto.PoliticaCorte{
 				Tipo:       tipo,
@@ -259,11 +259,4 @@ type manualDTO struct {
 	CuotasTotales int     `json:"cuotasTotales"`
 	FechaInicio   string  `json:"fechaInicio"`
 	TipoPago      string  `json:"tipoPago"`
-}
-
-func esCredito(source string) bool {
-	s := strings.ToLower(source)
-	return strings.Contains(s, "credito") ||
-		strings.Contains(s, "credit_card") ||
-		strings.HasPrefix(s, "tc_")
 }
