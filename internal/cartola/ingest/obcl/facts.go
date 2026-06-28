@@ -10,9 +10,9 @@ import (
 
 func InstrumentoDeSource(source string) ingest.Instrumento {
 	switch source {
-	case "account", "cta_corriente":
+	case "account":
 		return ingest.InstrumentoCuentaCorriente
-	case "credit_card_billed", "credit_card_unbilled", "tc_nacional", "tc_internacional":
+	case "credit_card_billed", "credit_card_unbilled":
 		return ingest.InstrumentoTarjetaCredito
 	default:
 		return ingest.InstrumentoDesconocido

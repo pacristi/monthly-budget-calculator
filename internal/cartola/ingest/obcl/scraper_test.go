@@ -14,12 +14,12 @@ func TestInstrumentoDeSource(t *testing.T) {
 		quiero ingest.Instrumento
 	}{
 		{"account", ingest.InstrumentoCuentaCorriente},
-		{"cta_corriente", ingest.InstrumentoCuentaCorriente},
 		{"credit_card_billed", ingest.InstrumentoTarjetaCredito},
 		{"credit_card_unbilled", ingest.InstrumentoTarjetaCredito},
-		{"tc_nacional", ingest.InstrumentoTarjetaCredito},
-		{"tc_internacional", ingest.InstrumentoTarjetaCredito},
 		{"", ingest.InstrumentoDesconocido},
+		{"cta_corriente", ingest.InstrumentoDesconocido},
+		{"tc_nacional", ingest.InstrumentoDesconocido},
+		{"tc_internacional", ingest.InstrumentoDesconocido},
 		{"tarjeta_credito_visa", ingest.InstrumentoDesconocido},
 		{"algo_que_obcl_invente_manana", ingest.InstrumentoDesconocido},
 	}
