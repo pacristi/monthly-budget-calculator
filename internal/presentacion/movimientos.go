@@ -5,6 +5,10 @@ import (
 	"presupuesto/internal/presupuesto"
 )
 
+type Presentador interface {
+	PresentarMovimientos() ([]Movimiento, error)
+}
+
 // Movimiento es la vista estable que comparten las interfaces de usuario.
 type Movimiento struct {
 	ID          string   `json:"id"`

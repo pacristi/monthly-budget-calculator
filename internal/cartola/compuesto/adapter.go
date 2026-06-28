@@ -6,6 +6,8 @@
 package compuesto
 
 import (
+	"fmt"
+
 	"presupuesto/internal/presentacion"
 	"presupuesto/internal/presupuesto"
 )
@@ -14,22 +16,33 @@ import (
 type Adapter struct {
 	liquidado  presupuesto.ProveedorFinanciero
 	provisorio presupuesto.ProveedorFinanciero
+	liqVista   presentacion.Presentador
+	provVista  presentacion.Presentador
 }
 
 // NewAdapter construye el Compuesto a partir de los dos proveedores.
-func NewAdapter(liquidado, provisorio presupuesto.ProveedorFinanciero) *Adapter {
-	return &Adapter{liquidado: liquidado, provisorio: provisorio}
+func NewAdapter(liquidado, provisorio presupuesto.ProveedorFinanciero, liqVista, provVista presentacion.Presentador) *Adapter {
+	return &Adapter{liquidado: liquidado, provisorio: provisorio, liqVista: liqVista, provVista: provVista}
 }
 
 // NewDesdeFuentes construye el proveedor de lectura a partir de sus fuentes.
 // El liquidado siempre está; el provisorio se compone solo si existe. Sin
 // fuente de scrape (usuario solo-xlsx) devuelve el liquidado solo, sin
 // reventar.
-func NewDesdeFuentes(liquidado, provisorio presupuesto.ProveedorFinanciero) presupuesto.ProveedorFinanciero {
-	if provisorio == nil {
-		return liquidado
+func NewDesdeFuentes(liquidado, provisorio presupuesto.ProveedorFinanciero) (presupuesto.ProveedorFinanciero, presentacion.Presentador, error) {
+	presentadorLiquidado, ok := liquidado.(presentacion.Presentador)
+	if !ok {
+		return nil, nil, fmt.Errorf("fuente liquidada sin vista de movimientos")
 	}
-	return NewAdapter(liquidado, provisorio)
+	if provisorio == nil {
+		return liquidado, presentadorLiquidado, nil
+	}
+	presentadorProvisorio, ok := provisorio.(presentacion.Presentador)
+	if !ok {
+		return nil, nil, fmt.Errorf("fuente provisoria sin vista de movimientos")
+	}
+	adaptador := NewAdapter(liquidado, provisorio, presentadorLiquidado, presentadorProvisorio)
+	return adaptador, adaptador, nil
 }
 
 // ObtenerSueldoBase se delega a la capa liquidada: el sueldo es un abono de
@@ -72,11 +85,11 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 }
 
 func (a *Adapter) PresentarMovimientos() ([]presentacion.Movimiento, error) {
-	liq, err := presentarMovimientos(a.liquidado)
+	liq, err := a.liqVista.PresentarMovimientos()
 	if err != nil {
 		return nil, err
 	}
-	prov, err := presentarMovimientos(a.provisorio)
+	prov, err := a.provVista.PresentarMovimientos()
 	if err != nil {
 		return nil, err
 	}
@@ -84,17 +97,4 @@ func (a *Adapter) PresentarMovimientos() ([]presentacion.Movimiento, error) {
 	out = append(out, liq...)
 	out = append(out, prov...)
 	return out, nil
-}
-
-func presentarMovimientos(proveedor presupuesto.ProveedorFinanciero) ([]presentacion.Movimiento, error) {
-	if p, ok := proveedor.(interface {
-		PresentarMovimientos() ([]presentacion.Movimiento, error)
-	}); ok {
-		return p.PresentarMovimientos()
-	}
-	movs, err := proveedor.ObtenerMovimientos()
-	if err != nil {
-		return nil, err
-	}
-	return presentacion.Movimientos(movs, nil), nil
 }

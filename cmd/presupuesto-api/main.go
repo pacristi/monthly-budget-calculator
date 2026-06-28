@@ -19,13 +19,10 @@ import (
 )
 
 type apiDeps struct {
-	app       *bootstrap.App
-	refresh   refreshUseCase
-	adaptador presupuesto.ProveedorFinanciero
-}
-
-type presentadorMovimientos interface {
-	PresentarMovimientos() ([]presentacion.Movimiento, error)
+	app         *bootstrap.App
+	refresh     refreshUseCase
+	adaptador   presupuesto.ProveedorFinanciero
+	movimientos presentacion.Presentador
 }
 
 func main() {
@@ -76,8 +73,9 @@ func main() {
 	defer app.Close()
 
 	deps := apiDeps{
-		app:       app,
-		adaptador: app.Adaptador,
+		app:         app,
+		adaptador:   app.Adaptador,
+		movimientos: app.Movimientos,
 		refresh: refresh.CasoDeUso{
 			Scraper:     nodeScraper{Dir: "ingest", Script: "scraper.js", OutputPath: app.ProvisorioPath},
 			Fuente:      fuentes.NuevaOpenBankingChile(app.ProvisorioPath),
@@ -296,12 +294,7 @@ func (deps apiDeps) handleProjections(w http.ResponseWriter, r *http.Request) {
 }
 
 func (deps apiDeps) handleMovements(w http.ResponseWriter, r *http.Request) {
-	presentador, ok := deps.adaptador.(presentadorMovimientos)
-	if !ok {
-		http.Error(w, "adaptador sin vista de movimientos", http.StatusInternalServerError)
-		return
-	}
-	movs, err := presentador.PresentarMovimientos()
+	movs, err := deps.movimientos.PresentarMovimientos()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

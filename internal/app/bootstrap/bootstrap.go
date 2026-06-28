@@ -13,6 +13,7 @@ import (
 	"presupuesto/internal/cartola/obchile"
 	sqlitepkg "presupuesto/internal/cartola/sqlite"
 	"presupuesto/internal/config"
+	"presupuesto/internal/presentacion"
 	"presupuesto/internal/presupuesto"
 )
 
@@ -36,6 +37,7 @@ type App struct {
 	RepoCategorias  *config.RepoCategorias
 	RepoMovimientos ingesta.RepositorioMovimientos
 	Adaptador       presupuesto.ProveedorFinanciero
+	Movimientos     presentacion.Presentador
 	DivisionesPath  string
 	ExclusionesPath string
 	ReglasPath      string
@@ -77,7 +79,9 @@ func New(cfg Config) (*App, error) {
 		if cfg.LegacyJSONPath == "" {
 			return nil, fmt.Errorf("ruta JSON requerida para proveedor obchile")
 		}
-		app.Adaptador = obchile.NewAdapter(cfg.LegacyJSONPath, cfg.DivisionesPath, reglas, cfg.SueldoPath, cfg.ManualesPath, repoConfigs)
+		adaptador := obchile.NewAdapter(cfg.LegacyJSONPath, cfg.DivisionesPath, reglas, cfg.SueldoPath, cfg.ManualesPath, repoConfigs)
+		app.Adaptador = adaptador
+		app.Movimientos = adaptador
 	case "sqlite", "compuesto":
 		db, err := sql.Open("sqlite", cfg.DBPath)
 		if err != nil {
@@ -93,12 +97,18 @@ func New(cfg Config) (*App, error) {
 		liquidado := sqlitepkg.NewAdapter(db, cfg.DivisionesPath, reglas, cfg.SueldoPath, cfg.ManualesPath, repoConfigs)
 		if cfg.Proveedor == "sqlite" {
 			app.Adaptador = liquidado
+			app.Movimientos = liquidado
 		} else {
 			var provisorio presupuesto.ProveedorFinanciero
 			if fileExists(cfg.ProvisorioPath) {
 				provisorio = obchile.NewAdapterProvisorio(cfg.ProvisorioPath, cfg.DivisionesPath, reglas, repoConfigs)
 			}
-			app.Adaptador = compuesto.NewDesdeFuentes(liquidado, provisorio)
+			adaptador, presentador, err := compuesto.NewDesdeFuentes(liquidado, provisorio)
+			if err != nil {
+				return nil, err
+			}
+			app.Adaptador = adaptador
+			app.Movimientos = presentador
 		}
 	default:
 		return nil, fmt.Errorf("--proveedor inválido: %s (compuesto | sqlite | obchile)", cfg.Proveedor)
