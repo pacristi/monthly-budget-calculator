@@ -162,12 +162,12 @@ func runIngestarSubcommand(args []string) {
 		log.Fatalf("Uso: presupuesto-cli ingestar {obcl|xlsx} ...")
 	}
 	switch args[0] {
-	case "obcl":
+	case "obcl", "obchile":
 		runIngestarOBCL(args[1:])
 	case "xlsx":
 		runIngestarXlsx(args[1:])
 	default:
-		log.Fatalf("Subcomando ingestar desconocido: %s. Usos: obcl", args[0])
+		log.Fatalf("Subcomando ingestar desconocido: %s. Usos: obcl|obchile", args[0])
 	}
 }
 
