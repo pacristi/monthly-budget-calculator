@@ -7,7 +7,7 @@ import (
 
 	"presupuesto/internal/cartola/ingest"
 	"presupuesto/internal/cartola/ingest/bchile"
-	"presupuesto/internal/cartola/obchile"
+	"presupuesto/internal/cartola/ingest/obcl"
 )
 
 type OpenBankingChile struct {
@@ -15,14 +15,14 @@ type OpenBankingChile struct {
 }
 
 func (f OpenBankingChile) LeerMovimientos() ([]ingest.MovimientoBruto, error) {
-	brutos, err := bchile.LeerScraper(f.JsonPath)
+	brutos, err := obcl.LeerScraper(f.JsonPath)
 	if err != nil {
 		return nil, err
 	}
 
 	liquidado := brutos[:0]
 	for _, b := range brutos {
-		if obchile.EsProvisorio(b.Source) {
+		if obcl.EsProvisorio(b.Source) {
 			continue
 		}
 		liquidado = append(liquidado, b)

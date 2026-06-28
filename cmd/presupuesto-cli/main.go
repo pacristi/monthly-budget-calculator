@@ -159,32 +159,32 @@ func main() {
 
 func runIngestarSubcommand(args []string) {
 	if len(args) < 1 {
-		log.Fatalf("Uso: presupuesto-cli ingestar {obchile|xlsx} ...")
+		log.Fatalf("Uso: presupuesto-cli ingestar {obcl|xlsx} ...")
 	}
 	switch args[0] {
-	case "obchile":
-		runIngestarObchile(args[1:])
+	case "obcl":
+		runIngestarOBCL(args[1:])
 	case "xlsx":
 		runIngestarXlsx(args[1:])
 	default:
-		log.Fatalf("Subcomando ingestar desconocido: %s. Usos: obchile", args[0])
+		log.Fatalf("Subcomando ingestar desconocido: %s. Usos: obcl", args[0])
 	}
 }
 
-func runIngestarObchile(args []string) {
-	fs := flag.NewFlagSet("ingestar obchile", flag.ExitOnError)
+func runIngestarOBCL(args []string) {
+	fs := flag.NewFlagSet("ingestar obcl", flag.ExitOnError)
 	dbPath := fs.String("db", "data/movimientos.db", "Ruta al archivo sqlite")
 	jsonPath := fs.String("json", "data/current.json", "Ruta al JSON producido por el scraper")
 	fs.Parse(args)
 
-	repo, cerrar := abrirRepoMovimientos(*dbPath, "obchile")
+	repo, cerrar := abrirRepoMovimientos(*dbPath, "obcl")
 	defer cerrar()
 
 	n, err := ingesta.DesdeFuente(fuentes.NuevaOpenBankingChile(*jsonPath), repo)
 	if err != nil {
-		log.Fatalf("ingesta obchile: %v", err)
+		log.Fatalf("ingesta obcl: %v", err)
 	}
-	fmt.Printf("Ingesta obchile: %d movimientos nuevos\n", n)
+	fmt.Printf("Ingesta obcl: %d movimientos nuevos\n", n)
 }
 
 func runIngestarXlsx(args []string) {

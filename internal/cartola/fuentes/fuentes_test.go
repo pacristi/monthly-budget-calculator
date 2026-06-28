@@ -33,7 +33,7 @@ func TestOpenBankingChile_NoEntregaProvisorios(t *testing.T) {
 func TestOpenBankingChile_PrimeraCarga(t *testing.T) {
 	jsonPath := writeTempJSON(t, jsonSintetico)
 	_, db := openTempDB(t)
-	repo := sqlitepkg.NewWriter(db, "obchile")
+	repo := sqlitepkg.NewWriter(db, "obcl")
 
 	insertados, err := ingesta.DesdeFuente(NuevaOpenBankingChile(jsonPath), repo)
 	if err != nil {
@@ -56,8 +56,8 @@ func TestOpenBankingChile_PrimeraCarga(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query starbucks: %v", err)
 	}
-	if origen != "obchile" {
-		t.Errorf("origen: esperaba 'obchile', obtuve %q", origen)
+	if origen != "obcl" {
+		t.Errorf("origen: esperaba 'obcl', obtuve %q", origen)
 	}
 	var rawMap map[string]any
 	if err := json.Unmarshal([]byte(raw), &rawMap); err != nil {
@@ -74,7 +74,7 @@ func TestOpenBankingChile_PrimeraCarga(t *testing.T) {
 func TestOpenBankingChile_EsIdempotente(t *testing.T) {
 	jsonPath := writeTempJSON(t, jsonSintetico)
 	_, db := openTempDB(t)
-	repo := sqlitepkg.NewWriter(db, "obchile")
+	repo := sqlitepkg.NewWriter(db, "obcl")
 	fuente := NuevaOpenBankingChile(jsonPath)
 
 	if n, err := ingesta.DesdeFuente(fuente, repo); err != nil || n != 3 {
@@ -94,7 +94,7 @@ func TestOpenBankingChile_EsIdempotente(t *testing.T) {
 func TestOpenBankingChile_NoPersisteProvisorio(t *testing.T) {
 	jsonPath := writeTempJSON(t, jsonConProvisorio)
 	_, db := openTempDB(t)
-	repo := sqlitepkg.NewWriter(db, "obchile")
+	repo := sqlitepkg.NewWriter(db, "obcl")
 
 	insertados, err := ingesta.DesdeFuente(NuevaOpenBankingChile(jsonPath), repo)
 	if err != nil {
