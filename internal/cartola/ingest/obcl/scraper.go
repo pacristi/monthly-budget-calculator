@@ -1,4 +1,4 @@
-package bchile
+package obcl
 
 import (
 	"encoding/json"
@@ -6,19 +6,10 @@ import (
 	"time"
 
 	"presupuesto/internal/cartola/ingest"
-	"presupuesto/internal/cartola/obchile"
 )
 
-const banco = "bchile"
-
-type MovimientoDTO = obchile.MovimientoDTO
-type Client = obchile.Client
-
-var NewClient = obchile.NewClient
-
-// LeerScraper lee el current.json del scraper y devuelve los movimientos del
-// banco como DTO canónico. No filtra (la política de qué se persiste vive en
-// el runner de ingesta) ni toca sqlite.
+// LeerScraper lee el current.json del scraper OBCL y devuelve los movimientos
+// como DTO canonico. No filtra ni toca sqlite.
 func LeerScraper(jsonPath string) ([]ingest.MovimientoBruto, error) {
 	dtos, err := NewClient(jsonPath).Fetch()
 	if err != nil {
@@ -47,18 +38,18 @@ func scraperABruto(d MovimientoDTO) (ingest.MovimientoBruto, error) {
 		return ingest.MovimientoBruto{}, err
 	}
 
-	moneda := obchile.MonedaDeMonto(d.Monto)
-	cuotaActual, cuotasTotales := obchile.CuotasDeInstallments(d.Installments)
+	moneda := MonedaDeMonto(d.Monto)
+	cuotaActual, cuotasTotales := CuotasDeInstallments(d.Installments)
 
 	return ingest.MovimientoBruto{
-		Banco:       banco,
+		Banco:       d.Banco,
 		Source:      d.Source,
 		Fecha:       fecha,
 		Monto:       d.Monto,
 		Descripcion: d.Descripcion,
-		Instrumento: obchile.InstrumentoDeSource(d.Source),
+		Instrumento: InstrumentoDeSource(d.Source),
 		Moneda:      moneda,
-		// El scraper entrega el monto TOTAL de la compra, también en cuotas.
+		// El scraper entrega el monto TOTAL de la compra, tambien en cuotas.
 		MontoRepresenta: ingest.MontoRepresentaTotal,
 		CuotaActual:     cuotaActual,
 		CuotasTotales:   cuotasTotales,

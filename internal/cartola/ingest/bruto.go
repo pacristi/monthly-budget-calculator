@@ -1,5 +1,5 @@
 // Package ingest contiene los tipos comunes para ingestar movimientos crudos
-// desde múltiples fuentes (cartolas xlsx, scraper obchile) hacia la capa
+// desde múltiples fuentes (cartolas xlsx, scraper OBCL) hacia la capa
 // de persistencia sqlite.
 package ingest
 
