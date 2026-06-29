@@ -63,6 +63,7 @@ const escapeHtml = (s) => String(s)
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 const jsString = (s) => JSON.stringify(String(s)).replace(/</g, '\\u003c');
+const jsValue = (v) => JSON.stringify(v ?? null).replace(/</g, '\\u003c');
 
 const renderConfigWidget = (cfg, mesSeleccionado) => {
     if (!cfg) return;
@@ -188,8 +189,7 @@ const buildCategoriaSelect = (m) => {
         `<option value="${c.id}" ${c.id === m.categoriaId ? 'selected' : ''}>${c.nombre}</option>`
     );
     opciones.push(`<option value="${IGNORAR}" ${m.categoriaId === IGNORAR ? 'selected' : ''}>— ignorar —</option>`);
-    const descEsc = m.descripcion.replace(/'/g, "\\'");
-    return `<select class="cat-select" onchange="setMovimientoCategoria('${m.fecha}', ${m.monto}, '${descEsc}', this.value)">${opciones.join('')}</select>`;
+    return `<select class="cat-select" onchange="setMovimientoCategoria(${jsString(m.fecha)}, ${jsValue(m.monto)}, ${jsString(m.descripcion)}, this.value)">${opciones.join('')}</select>`;
 };
 
 window.setMovimientoCategoria = async (fecha, monto, descripcion, categoria) => {
@@ -226,8 +226,7 @@ const loadMovements = async () => {
                 if (m.miParte !== undefined && m.miParte !== null && m.miParte !== m.monto) {
                     badge = `<span class="badge">mi parte: ${formatCurrency(Math.abs(m.miParte), m.isUsd)}</span>`;
                 }
-                const descEsc = m.descripcion.replace(/'/g, "\\'");
-                const miParteArg = m.miParte !== undefined && m.miParte !== null ? m.miParte : 'null';
+                const miParteArg = m.miParte !== undefined && m.miParte !== null ? jsValue(m.miParte) : 'null';
                 const original = m.descripcionOriginal ? `<span class="mov-original" title="${escapeHtml(m.descripcionOriginal)}">original: ${escapeHtml(m.descripcionOriginal)}</span>` : '';
                 tr.innerHTML = `
                     <td>${formatFecha(m.fecha)}</td>
@@ -235,13 +234,13 @@ const loadMovements = async () => {
                     <td>${formatCurrency(m.monto, m.isUsd)}</td>
                     <td>${buildCategoriaSelect(m)}</td>
                     <td>
-                        <button class="btn btn-ghost btn-sm" onclick="openRenameModal(${jsString(m.id)}, ${jsString(m.fecha)}, ${m.monto}, ${jsString(m.descripcionOriginal || m.descripcion)}, ${jsString(m.descripcionOriginal ? m.descripcion : '')})">
+                        <button class="btn btn-ghost btn-sm" onclick="openRenameModal(${jsString(m.id)}, ${jsString(m.fecha)}, ${jsValue(m.monto)}, ${jsString(m.descripcionOriginal || m.descripcion)}, ${jsString(m.descripcionOriginal ? m.descripcion : '')})">
                             Renombrar
                         </button>
-                        <button class="btn btn-primary btn-sm" onclick="openDivideModal('${m.fecha}', '${descEsc}', ${m.monto}, ${m.isUsd || false}, ${miParteArg})">
+                        <button class="btn btn-primary btn-sm" onclick="openDivideModal(${jsString(m.fecha)}, ${jsString(m.descripcion)}, ${jsValue(m.monto)}, ${jsValue(m.isUsd || false)}, ${miParteArg})">
                             Mi parte
                         </button>
-                        <button class="btn btn-secondary btn-sm" onclick="ignorarGasto('${m.fecha}', '${descEsc}', ${m.monto})" title="Marca este gasto como no contable (mi parte = 0)">
+                        <button class="btn btn-secondary btn-sm" onclick="ignorarGasto(${jsString(m.fecha)}, ${jsString(m.descripcion)}, ${jsValue(m.monto)})" title="Marca este gasto como no contable (mi parte = 0)">
                             No contar
                         </button>
                     </td>
