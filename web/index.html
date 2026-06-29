@@ -228,6 +228,31 @@
         </div>
     </div>
 
+    <!-- Modal para renombrar sin cambiar la descripción original -->
+    <div class="modal" id="rename-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Nombre visible</h3>
+                <button class="close-btn" id="close-rename-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="rename-original-desc">Descripción original</p>
+                <form id="rename-form">
+                    <input type="hidden" id="rename-id">
+                    <input type="hidden" id="rename-fecha">
+                    <input type="hidden" id="rename-monto">
+                    <input type="hidden" id="rename-descripcion">
+                    <div class="form-group">
+                        <label for="input-rename">Mostrar como:</label>
+                        <input type="text" id="input-rename" class="form-control" placeholder="ej: Starbucks" autocomplete="off">
+                        <small class="form-hint">Se guarda como override. La descripción original no cambia.</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Config Mensual -->
     <div class="modal" id="config-modal">
         <div class="modal-content">

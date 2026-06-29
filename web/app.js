@@ -56,6 +56,15 @@ const nombreCategoria = (id) => {
     return c ? c.nombre : id;
 };
 
+const escapeHtml = (s) => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+const jsString = (s) => JSON.stringify(String(s)).replace(/</g, '\\u003c');
+const jsValue = (v) => JSON.stringify(v ?? null).replace(/</g, '\\u003c');
+
 const renderConfigWidget = (cfg, mesSeleccionado) => {
     if (!cfg) return;
     document.getElementById('config-corte').textContent = cfg.diaDeCorteCredito;
@@ -180,8 +189,7 @@ const buildCategoriaSelect = (m) => {
         `<option value="${c.id}" ${c.id === m.categoriaId ? 'selected' : ''}>${c.nombre}</option>`
     );
     opciones.push(`<option value="${IGNORAR}" ${m.categoriaId === IGNORAR ? 'selected' : ''}>— ignorar —</option>`);
-    const descEsc = m.descripcion.replace(/'/g, "\\'");
-    return `<select class="cat-select" onchange="setMovimientoCategoria('${m.fecha}', ${m.monto}, '${descEsc}', this.value)">${opciones.join('')}</select>`;
+    return `<select class="cat-select" onchange="setMovimientoCategoria(${jsString(m.fecha)}, ${jsValue(m.monto)}, ${jsString(m.descripcionOriginal || m.descripcion)}, this.value)">${opciones.join('')}</select>`;
 };
 
 window.setMovimientoCategoria = async (fecha, monto, descripcion, categoria) => {
@@ -218,18 +226,22 @@ const loadMovements = async () => {
                 if (m.miParte !== undefined && m.miParte !== null && m.miParte !== m.monto) {
                     badge = `<span class="badge">mi parte: ${formatCurrency(Math.abs(m.miParte), m.isUsd)}</span>`;
                 }
-                const descEsc = m.descripcion.replace(/'/g, "\\'");
-                const miParteArg = m.miParte !== undefined && m.miParte !== null ? m.miParte : 'null';
+                const miParteArg = m.miParte !== undefined && m.miParte !== null ? jsValue(m.miParte) : 'null';
+                const descripcionOriginal = m.descripcionOriginal || m.descripcion;
+                const original = m.descripcionOriginal ? `<span class="mov-original" title="${escapeHtml(m.descripcionOriginal)}">original: ${escapeHtml(m.descripcionOriginal)}</span>` : '';
                 tr.innerHTML = `
                     <td>${formatFecha(m.fecha)}</td>
-                    <td>${m.descripcion} ${badge}</td>
+                    <td><span class="mov-desc">${escapeHtml(m.descripcion)}</span>${original} ${badge}</td>
                     <td>${formatCurrency(m.monto, m.isUsd)}</td>
                     <td>${buildCategoriaSelect(m)}</td>
                     <td>
-                        <button class="btn btn-primary btn-sm" onclick="openDivideModal('${m.fecha}', '${descEsc}', ${m.monto}, ${m.isUsd || false}, ${miParteArg})">
+                        <button class="btn btn-ghost btn-sm" onclick="openRenameModal(${jsString(m.id)}, ${jsString(m.fecha)}, ${jsValue(m.monto)}, ${jsString(m.descripcionOriginal || m.descripcion)}, ${jsString(m.descripcionOriginal ? m.descripcion : '')})">
+                            Renombrar
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="openDivideModal(${jsString(m.fecha)}, ${jsString(descripcionOriginal)}, ${jsValue(m.monto)}, ${jsValue(m.isUsd || false)}, ${miParteArg})">
                             Mi parte
                         </button>
-                        <button class="btn btn-secondary btn-sm" onclick="ignorarGasto('${m.fecha}', '${descEsc}', ${m.monto})" title="Marca este gasto como no contable (mi parte = 0)">
+                        <button class="btn btn-secondary btn-sm" onclick="ignorarGasto(${jsString(m.fecha)}, ${jsString(descripcionOriginal)}, ${jsValue(m.monto)})" title="Marca este gasto como no contable (mi parte = 0)">
                             No contar
                         </button>
                     </td>
@@ -247,6 +259,20 @@ const loadMovements = async () => {
 const modal = document.getElementById('divide-modal');
 const closeBtn = document.getElementById('close-modal');
 const form = document.getElementById('divide-form');
+const renameModal = document.getElementById('rename-modal');
+const renameForm = document.getElementById('rename-form');
+const closeRenameBtn = document.getElementById('close-rename-modal');
+
+window.openRenameModal = (id, fecha, monto, descripcionOriginal, aliasActual) => {
+    document.getElementById('rename-id').value = id;
+    document.getElementById('rename-fecha').value = fecha;
+    document.getElementById('rename-monto').value = monto;
+    document.getElementById('rename-descripcion').value = descripcionOriginal;
+    document.getElementById('rename-original-desc').textContent = `Original: ${descripcionOriginal}`;
+    document.getElementById('input-rename').value = aliasActual;
+    renameModal.classList.add('active');
+    document.getElementById('input-rename').focus();
+};
 
 window.openDivideModal = (fecha, descripcion, monto, isUsd = false, miParteActual = null) => {
     document.getElementById('modal-desc').textContent = descripcion;
@@ -296,10 +322,35 @@ window.ignorarGasto = async (fecha, descripcion, monto) => {
 };
 
 closeBtn.onclick = () => modal.classList.remove('active');
+closeRenameBtn.onclick = () => renameModal.classList.remove('active');
 window.addEventListener('click', (e) => {
     if (e.target === modal) modal.classList.remove('active');
+    if (e.target === renameModal) renameModal.classList.remove('active');
     if (e.target === document.getElementById('config-modal')) document.getElementById('config-modal').classList.remove('active');
 });
+
+renameForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const movimientoId = document.getElementById('rename-id').value;
+    const fecha = document.getElementById('rename-fecha').value;
+    const montoOriginal = parseFloat(document.getElementById('rename-monto').value);
+    const descripcion = document.getElementById('rename-descripcion').value;
+    const alias = document.getElementById('input-rename').value.trim();
+
+    try {
+        const res = await fetch('/api/movimientos/alias', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ movimientoId, fecha, montoOriginal, descripcion, alias })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        renameModal.classList.remove('active');
+        loadMovements();
+    } catch (e) {
+        console.error('Error renombrando movimiento:', e);
+        alert('Error al guardar el nombre visible');
+    }
+};
 
 form.onsubmit = async (e) => {
     e.preventDefault();

@@ -95,6 +95,7 @@ func main() {
 	http.HandleFunc("/api/projections", deps.handleProjections)
 	http.HandleFunc("/api/movements", deps.handleMovements)
 	http.HandleFunc("/api/divisions", deps.handleDivisions)
+	http.HandleFunc("/api/movimientos/alias", deps.handleMovimientoAlias)
 	http.HandleFunc("/api/configs", handlerListar(app.RepoConfigs))
 	http.HandleFunc("/api/configs/", handlerSubconfigs(app.RepoConfigs))
 	http.HandleFunc("/api/exclusiones", handleListaStrings(app.ExclusionesPath))
@@ -321,6 +322,31 @@ func (deps apiDeps) handleDivisions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := ajustes.GuardarMiParte(deps.app.DivisionesPath, req); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (deps apiDeps) handleMovimientoAlias(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if deps.app.DivisionesPath == "" {
+		http.Error(w, "No divisions file configured", http.StatusBadRequest)
+		return
+	}
+
+	var req ajustes.Override
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := ajustes.GuardarAlias(deps.app.DivisionesPath, req); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

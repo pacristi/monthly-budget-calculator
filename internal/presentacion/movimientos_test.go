@@ -22,7 +22,8 @@ func TestMovimientosAplicaAliasDesdeOverrides(t *testing.T) {
 		MovimientoID:  "sql-1",
 		Fecha:         "2026-05-15",
 		MontoOriginal: -3500,
-		Descripcion:   "Café",
+		Descripcion:   "STARBUCKS PROVIDENCIA",
+		Alias:         "Café",
 	}}
 
 	got := presentacion.Movimientos(movs, overrides)
@@ -32,6 +33,9 @@ func TestMovimientosAplicaAliasDesdeOverrides(t *testing.T) {
 	}
 	if got[0].Descripcion != "Café" {
 		t.Fatalf("esperaba descripción visual %q, obtuvo %q", "Café", got[0].Descripcion)
+	}
+	if got[0].DescripcionOriginal != "STARBUCKS PROVIDENCIA" {
+		t.Fatalf("esperaba descripción original %q, obtuvo %q", "STARBUCKS PROVIDENCIA", got[0].DescripcionOriginal)
 	}
 	if movs[0].Descripcion != "STARBUCKS PROVIDENCIA" {
 		t.Fatalf("presupuesto.Movimiento no debe mutar, obtuvo %q", movs[0].Descripcion)

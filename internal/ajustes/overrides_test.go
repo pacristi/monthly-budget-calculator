@@ -120,6 +120,52 @@ func TestGuardarMiPartePreservaCategoria(t *testing.T) {
 	}
 }
 
+func TestGuardarAliasPreservaAjustesContables(t *testing.T) {
+	ruta := t.TempDir() + "/overrides.json"
+	miParte := -1750.0
+
+	if err := GuardarMiParte(ruta, Override{
+		MovimientoID:  "sql-42",
+		Fecha:         "2025-05-15",
+		MontoOriginal: -3500,
+		Descripcion:   "STARBUCKS PROVIDENCIA",
+		MiParte:       &miParte,
+		Categoria:     "cafes",
+	}); err != nil {
+		t.Fatalf("guardando mi parte: %v", err)
+	}
+
+	if err := GuardarAlias(ruta, Override{
+		MovimientoID:  "sql-42",
+		Fecha:         "2025-05-15",
+		MontoOriginal: -3500,
+		Descripcion:   "STARBUCKS PROVIDENCIA",
+		Alias:         "Café",
+	}); err != nil {
+		t.Fatalf("guardando alias: %v", err)
+	}
+
+	overrides, err := LeerOverrides(ruta)
+	if err != nil {
+		t.Fatalf("leyendo overrides: %v", err)
+	}
+	if len(overrides) != 1 {
+		t.Fatalf("esperaba 1 override, obtuve %d", len(overrides))
+	}
+	if overrides[0].Descripcion != "STARBUCKS PROVIDENCIA" {
+		t.Fatalf("la descripción original debe quedar intacta, obtuvo %q", overrides[0].Descripcion)
+	}
+	if overrides[0].Alias != "Café" {
+		t.Fatalf("alias no guardado correctamente: %+v", overrides[0])
+	}
+	if overrides[0].Categoria != "cafes" {
+		t.Fatalf("GuardarAlias debe preservar categoría, obtuvo %q", overrides[0].Categoria)
+	}
+	if overrides[0].MiParte == nil || *overrides[0].MiParte != -1750 {
+		t.Fatalf("GuardarAlias debe preservar miParte, obtuvo %+v", overrides[0].MiParte)
+	}
+}
+
 func TestGuardarMiParteMatcheaPorMovimientoIDAunqueCambieDescripcion(t *testing.T) {
 	ruta := t.TempDir() + "/overrides.json"
 
