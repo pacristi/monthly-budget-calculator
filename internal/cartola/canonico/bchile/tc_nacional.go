@@ -7,7 +7,7 @@ import (
 
 	"github.com/extrame/xls"
 
-	"presupuesto/internal/cartola/ingest"
+	"presupuesto/internal/cartola/canonico"
 )
 
 // TCNacional parsea cartolas mensuales de la tarjeta de crédito
@@ -24,7 +24,7 @@ func (p *TCNacional) Banco() string  { return "bchile" }
 func (p *TCNacional) Source() string { return "tc_nacional" }
 
 // Parsear ignora el año (las fechas vienen completas).
-func (p *TCNacional) Parsear(path string, _ int) ([]ingest.MovimientoBruto, error) {
+func (p *TCNacional) Parsear(path string, _ int) ([]canonico.MovimientoBruto, error) {
 	filas, err := leerFilasTCN(path)
 	if err != nil {
 		return nil, fmt.Errorf("leyendo %s: %w", path, err)
@@ -75,8 +75,8 @@ func leerFilasTCN(path string) ([]filaTCN, error) {
 	return out, nil
 }
 
-func filasTCNAMovimientos(filas []filaTCN) ([]ingest.MovimientoBruto, error) {
-	var out []ingest.MovimientoBruto
+func filasTCNAMovimientos(filas []filaTCN) ([]canonico.MovimientoBruto, error) {
+	var out []canonico.MovimientoBruto
 
 	for _, f := range filas {
 		if esFilaTCNVacia(f) {
@@ -104,19 +104,19 @@ func filasTCNAMovimientos(filas []filaTCN) ([]ingest.MovimientoBruto, error) {
 
 		cuotaActual, cuotasTotales := parseCuotas(f.cuotas)
 		// En el xlsx cada fila trae el monto de UNA cuota, no el total.
-		representa := ingest.MontoRepresentaTotal
+		representa := canonico.MontoRepresentaTotal
 		if cuotasTotales > 1 {
-			representa = ingest.MontoRepresentaCuota
+			representa = canonico.MontoRepresentaCuota
 		}
 
-		out = append(out, ingest.MovimientoBruto{
+		out = append(out, canonico.MovimientoBruto{
 			Banco:           "bchile",
 			Source:          "tc_nacional",
 			Fecha:           fecha,
 			Monto:           monto,
 			Descripcion:     f.descripcion,
-			Instrumento:     ingest.InstrumentoTarjetaCredito,
-			Moneda:          ingest.MonedaCLP,
+			Instrumento:     canonico.InstrumentoTarjetaCredito,
+			Moneda:          canonico.MonedaCLP,
 			MontoRepresenta: representa,
 			CuotaActual:     cuotaActual,
 			CuotasTotales:   cuotasTotales,

@@ -5,23 +5,23 @@ import (
 	"path/filepath"
 	"testing"
 
-	"presupuesto/internal/cartola/ingest"
+	"presupuesto/internal/cartola/canonico"
 )
 
 func TestInstrumentoDeSource(t *testing.T) {
 	casos := []struct {
 		source string
-		quiero ingest.Instrumento
+		quiero canonico.Instrumento
 	}{
-		{"account", ingest.InstrumentoCuentaCorriente},
-		{"credit_card_billed", ingest.InstrumentoTarjetaCredito},
-		{"credit_card_unbilled", ingest.InstrumentoTarjetaCredito},
-		{"", ingest.InstrumentoDesconocido},
-		{"cta_corriente", ingest.InstrumentoDesconocido},
-		{"tc_nacional", ingest.InstrumentoDesconocido},
-		{"tc_internacional", ingest.InstrumentoDesconocido},
-		{"tarjeta_credito_visa", ingest.InstrumentoDesconocido},
-		{"algo_que_obcl_invente_manana", ingest.InstrumentoDesconocido},
+		{"account", canonico.InstrumentoCuentaCorriente},
+		{"credit_card_billed", canonico.InstrumentoTarjetaCredito},
+		{"credit_card_unbilled", canonico.InstrumentoTarjetaCredito},
+		{"", canonico.InstrumentoDesconocido},
+		{"cta_corriente", canonico.InstrumentoDesconocido},
+		{"tc_nacional", canonico.InstrumentoDesconocido},
+		{"tc_internacional", canonico.InstrumentoDesconocido},
+		{"tarjeta_credito_visa", canonico.InstrumentoDesconocido},
+		{"algo_que_obcl_invente_manana", canonico.InstrumentoDesconocido},
 	}
 	for _, c := range casos {
 		if got := InstrumentoDeSource(c.source); got != c.quiero {
@@ -33,13 +33,13 @@ func TestInstrumentoDeSource(t *testing.T) {
 func TestMonedaDeMonto(t *testing.T) {
 	casos := []struct {
 		monto  float64
-		quiero ingest.Moneda
+		quiero canonico.Moneda
 	}{
-		{6000, ingest.MonedaCLP},
-		{-50000, ingest.MonedaCLP},
-		{0, ingest.MonedaCLP},
-		{78.57, ingest.MonedaUSD},
-		{-2.56, ingest.MonedaUSD},
+		{6000, canonico.MonedaCLP},
+		{-50000, canonico.MonedaCLP},
+		{0, canonico.MonedaCLP},
+		{78.57, canonico.MonedaUSD},
+		{-2.56, canonico.MonedaUSD},
 	}
 	for _, c := range casos {
 		if got := MonedaDeMonto(c.monto); got != c.quiero {
@@ -52,9 +52,9 @@ func TestScraperABruto_HechosCanonicos(t *testing.T) {
 	casos := []struct {
 		nombre              string
 		dto                 MovimientoDTO
-		quiereInstrumento   ingest.Instrumento
-		quiereMoneda        ingest.Moneda
-		quiereRepresenta    ingest.MontoRepresenta
+		quiereInstrumento   canonico.Instrumento
+		quiereMoneda        canonico.Moneda
+		quiereRepresenta    canonico.MontoRepresenta
 		quiereCuotaActual   int
 		quiereCuotasTotales int
 		quiereIsUSD         bool
@@ -63,9 +63,9 @@ func TestScraperABruto_HechosCanonicos(t *testing.T) {
 		{
 			nombre:              "cuenta corriente en CLP",
 			dto:                 MovimientoDTO{Banco: "bchile", Fecha: "15-05-2026", Descripcion: "Traspaso A:X", Monto: -6000, Source: "account", Installments: ""},
-			quiereInstrumento:   ingest.InstrumentoCuentaCorriente,
-			quiereMoneda:        ingest.MonedaCLP,
-			quiereRepresenta:    ingest.MontoRepresentaTotal,
+			quiereInstrumento:   canonico.InstrumentoCuentaCorriente,
+			quiereMoneda:        canonico.MonedaCLP,
+			quiereRepresenta:    canonico.MontoRepresentaTotal,
 			quiereCuotaActual:   1,
 			quiereCuotasTotales: 1,
 			quiereIsUSD:         false,
@@ -74,9 +74,9 @@ func TestScraperABruto_HechosCanonicos(t *testing.T) {
 		{
 			nombre:              "tarjeta credito CLP en cuotas (monto es el total)",
 			dto:                 MovimientoDTO{Banco: "bchile", Fecha: "13-05-2026", Descripcion: "Starbucks", Monto: -36000, Source: "credit_card_billed", Installments: "01/12"},
-			quiereInstrumento:   ingest.InstrumentoTarjetaCredito,
-			quiereMoneda:        ingest.MonedaCLP,
-			quiereRepresenta:    ingest.MontoRepresentaTotal,
+			quiereInstrumento:   canonico.InstrumentoTarjetaCredito,
+			quiereMoneda:        canonico.MonedaCLP,
+			quiereRepresenta:    canonico.MontoRepresentaTotal,
 			quiereCuotaActual:   1,
 			quiereCuotasTotales: 12,
 			quiereIsUSD:         false,
@@ -85,9 +85,9 @@ func TestScraperABruto_HechosCanonicos(t *testing.T) {
 		{
 			nombre:              "tarjeta credito en USD (monto con decimal)",
 			dto:                 MovimientoDTO{Banco: "bchile", Fecha: "13-05-2026", Descripcion: "UBER *LIME", Monto: -2.56, Source: "credit_card_unbilled", Installments: ""},
-			quiereInstrumento:   ingest.InstrumentoTarjetaCredito,
-			quiereMoneda:        ingest.MonedaUSD,
-			quiereRepresenta:    ingest.MontoRepresentaTotal,
+			quiereInstrumento:   canonico.InstrumentoTarjetaCredito,
+			quiereMoneda:        canonico.MonedaUSD,
+			quiereRepresenta:    canonico.MontoRepresentaTotal,
 			quiereCuotaActual:   1,
 			quiereCuotasTotales: 1,
 			quiereIsUSD:         true,

@@ -6,7 +6,7 @@
 
 **Architecture:** Introduce a richer `MovimientoBruto` contract that records canonical facts: payment instrument, settlement state, currency, installment semantics, and amount semantics. Persist those facts in SQLite with a backwards-compatible migration, then update writers and adapters to use explicit columns while keeping existing data readable during migration.
 
-**Tech Stack:** Go, SQLite via `modernc.org/sqlite`, existing `internal/cartola/ingest`, `internal/cartola/sqlite`, `internal/cartola/obchile`, and parser tests.
+**Tech Stack:** Go, SQLite via `modernc.org/sqlite`, existing `internal/cartola/canonico`, `internal/cartola/sqlite`, `internal/cartola/obchile`, and parser tests.
 
 ---
 
@@ -48,7 +48,7 @@ Canonical vocabulary:
 
 **Files:**
 
-- Modify: `internal/cartola/ingest/bruto.go`
+- Modify: `internal/cartola/canonico/bruto.go`
 - Test: add focused compile-time usage in existing parser/writer tests as later tasks
 
 **Step 1: Extend the ingest contract**
@@ -150,7 +150,7 @@ Expected: tests still pass, because existing fields remain available.
 **Step 4: Commit**
 
 ```bash
-git add internal/cartola/ingest/bruto.go
+git add internal/cartola/canonico/bruto.go
 git commit -m "refactor: add canonical financial facts to ingest"
 ```
 
@@ -278,16 +278,16 @@ func TestInsertarConDedup_PersistsCanonicalFinancialFacts(t *testing.T) {
 	w := setupWriter(t)
 	fecha := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 
-	_, err := w.InsertarConDedup([]ingest.MovimientoBruto{{
+	_, err := w.InsertarConDedup([]canonico.MovimientoBruto{{
 		Banco:            "bchile",
 		Source:           "legacy-source-for-audit",
 		Fecha:            fecha,
 		Monto:            -11.08,
 		Descripcion:      "NETFLIX.COM",
-		Instrumento:      ingest.InstrumentoTarjetaCredito,
-		Estado:           ingest.EstadoLiquidado,
-		Moneda:           ingest.MonedaUSD,
-		MontoRepresenta:  ingest.MontoRepresentaTotal,
+		Instrumento:      canonico.InstrumentoTarjetaCredito,
+		Estado:           canonico.EstadoLiquidado,
+		Moneda:           canonico.MonedaUSD,
+		MontoRepresenta:  canonico.MontoRepresentaTotal,
 		CuotaActual:      1,
 		CuotasTotales:    1,
 	}})
@@ -419,7 +419,7 @@ SELECT id, fecha, monto, descripcion, instrumento, moneda, cuotas_totales
 Then map:
 
 ```go
-if instrumento == string(ingest.InstrumentoTarjetaCredito) {
+if instrumento == string(canonico.InstrumentoTarjetaCredito) {
 	tipo = presupuesto.Credito
 }
 ```
@@ -465,8 +465,8 @@ func TestInsertarConDedup_CuotasMontoRepresentaCuota(t *testing.T) {
 	w := setupWriter(t)
 	f := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
 
-	batch := []ingest.MovimientoBruto{
-		movCanonicoCuota(f, -22700, "VOLCOM", 1, 6, ingest.MontoRepresentaCuota),
+	batch := []canonico.MovimientoBruto{
+		movCanonicoCuota(f, -22700, "VOLCOM", 1, 6, canonico.MontoRepresentaCuota),
 	}
 	n, err := w.InsertarConDedup(batch)
 	if err != nil || n != 1 {
@@ -493,8 +493,8 @@ func TestInsertarConDedup_CuotasMontoRepresentaTotal(t *testing.T) {
 	w := setupWriter(t)
 	f := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
 
-	n, err := w.InsertarConDedup([]ingest.MovimientoBruto{
-		movCanonicoCuota(f, -136200, "VOLCOM", 1, 6, ingest.MontoRepresentaTotal),
+	n, err := w.InsertarConDedup([]canonico.MovimientoBruto{
+		movCanonicoCuota(f, -136200, "VOLCOM", 1, 6, canonico.MontoRepresentaTotal),
 	})
 	if err != nil || n != 1 {
 		t.Fatalf("InsertarConDedup: n=%d err=%v", n, err)
@@ -524,12 +524,12 @@ Expected: fails until writer uses `MontoRepresenta`.
 Refactor `construirRepresentanteCompra` to branch on `MontoRepresenta`, not `w.origen`:
 
 ```go
-func construirRepresentanteCompra(group []ingest.MovimientoBruto) (ingest.MovimientoBruto, bool) {
+func construirRepresentanteCompra(group []canonico.MovimientoBruto) (canonico.MovimientoBruto, bool) {
 	group = aplicarDefaults(group)
 	switch group[0].MontoRepresenta {
-	case ingest.MontoRepresentaTotal:
+	case canonico.MontoRepresentaTotal:
 		return representanteMontoTotal(group)
-	case ingest.MontoRepresentaCuota:
+	case canonico.MontoRepresentaCuota:
 		return representanteDesdeCuotas(group)
 	default:
 		return representanteDesdeCuotas(group)
@@ -542,7 +542,7 @@ When storing representative total rows, set:
 ```go
 base.CuotaActual = 0
 base.CuotasTotales = totalCuotas
-base.MontoRepresenta = ingest.MontoRepresentaTotal
+base.MontoRepresenta = canonico.MontoRepresentaTotal
 base.Cuotas = fmt.Sprintf("00/%02d", totalCuotas) // temporary legacy compatibility
 ```
 
@@ -567,9 +567,9 @@ git commit -m "refactor: use explicit amount semantics for installments"
 
 **Files:**
 
-- Modify: `internal/cartola/ingest/xlsx/bchile_cta_corriente.go`
-- Modify: `internal/cartola/ingest/xlsx/bchile_tc_nacional.go`
-- Modify: `internal/cartola/ingest/xlsx/bchile_tc_internacional.go`
+- Modify: `internal/cartola/canonico/bchile/cta_corriente.go`
+- Modify: `internal/cartola/canonico/bchile/tc_nacional.go`
+- Modify: `internal/cartola/canonico/bchile/tc_internacional.go`
 - Modify tests in same package
 
 **Step 1: Update cuenta corriente parser tests**
@@ -577,13 +577,13 @@ git commit -m "refactor: use explicit amount semantics for installments"
 For account movements assert:
 
 ```go
-if movs[0].Instrumento != ingest.InstrumentoCuentaCorriente {
+if movs[0].Instrumento != canonico.InstrumentoCuentaCorriente {
 	t.Fatalf("instrumento: %s", movs[0].Instrumento)
 }
-if movs[0].Estado != ingest.EstadoLiquidado {
+if movs[0].Estado != canonico.EstadoLiquidado {
 	t.Fatalf("estado: %s", movs[0].Estado)
 }
-if movs[0].Moneda != ingest.MonedaCLP {
+if movs[0].Moneda != canonico.MonedaCLP {
 	t.Fatalf("moneda: %s", movs[0].Moneda)
 }
 if movs[0].CuotasTotales != 1 {
@@ -596,10 +596,10 @@ if movs[0].CuotasTotales != 1 {
 Assert:
 
 ```go
-mov.Instrumento == ingest.InstrumentoTarjetaCredito
-mov.Estado == ingest.EstadoLiquidado
-mov.Moneda == ingest.MonedaCLP
-mov.MontoRepresenta == ingest.MontoRepresentaCuota
+mov.Instrumento == canonico.InstrumentoTarjetaCredito
+mov.Estado == canonico.EstadoLiquidado
+mov.Moneda == canonico.MonedaCLP
+mov.MontoRepresenta == canonico.MontoRepresentaCuota
 mov.CuotaActual == 1
 mov.CuotasTotales == 3
 ```
@@ -611,10 +611,10 @@ For `00/N` informational rows, preserve current behavior for now: parser may emi
 Assert:
 
 ```go
-mov.Instrumento == ingest.InstrumentoTarjetaCredito
-mov.Estado == ingest.EstadoLiquidado
-mov.Moneda == ingest.MonedaUSD
-mov.MontoRepresenta == ingest.MontoRepresentaTotal
+mov.Instrumento == canonico.InstrumentoTarjetaCredito
+mov.Estado == canonico.EstadoLiquidado
+mov.Moneda == canonico.MonedaUSD
+mov.MontoRepresenta == canonico.MontoRepresentaTotal
 mov.CuotasTotales == 1
 ```
 
@@ -623,10 +623,10 @@ mov.CuotasTotales == 1
 Each parser should populate canonical fields directly. Keep `IsUSD` and `Cuotas` in sync until they are removed:
 
 ```go
-Instrumento: ingest.InstrumentoTarjetaCredito,
-Estado: ingest.EstadoLiquidado,
-Moneda: ingest.MonedaCLP,
-MontoRepresenta: ingest.MontoRepresentaCuota,
+Instrumento: canonico.InstrumentoTarjetaCredito,
+Estado: canonico.EstadoLiquidado,
+Moneda: canonico.MonedaCLP,
+MontoRepresenta: canonico.MontoRepresentaCuota,
 CuotaActual: cuotaActual,
 CuotasTotales: cuotasTotales,
 IsUSD: false,
@@ -636,7 +636,7 @@ Cuotas: f.cuotas,
 **Step 5: Run parser tests**
 
 ```bash
-go test ./internal/cartola/ingest/xlsx
+go test ./internal/cartola/canonico/bchile
 ```
 
 Expected: pass.
@@ -644,7 +644,7 @@ Expected: pass.
 **Step 6: Commit**
 
 ```bash
-git add internal/cartola/ingest/xlsx
+git add internal/cartola/canonico/bchile
 git commit -m "refactor: emit canonical facts from bchile parsers"
 ```
 
@@ -654,8 +654,8 @@ git commit -m "refactor: emit canonical facts from bchile parsers"
 
 **Files:**
 
-- Modify: `internal/cartola/ingest/obchile/ingestor.go`
-- Modify: `internal/cartola/ingest/obchile/ingestor_test.go`
+- Modify: `internal/cartola/canonico/obchile/ingestor.go`
+- Modify: `internal/cartola/canonico/obchile/ingestor_test.go`
 - Modify: `internal/cartola/obchile/adapter.go`
 - Modify: `internal/cartola/obchile/adapter_test.go`
 
@@ -682,9 +682,9 @@ For `source=credit_card_unbilled`, assert it still is not persisted by `Ingestar
 Add local functions:
 
 ```go
-func instrumentoDesdeSource(source string) ingest.Instrumento
-func estadoDesdeSource(source string) ingest.EstadoMovimiento
-func monedaDesdeMonto(monto float64) ingest.Moneda
+func instrumentoDesdeSource(source string) canonico.Instrumento
+func estadoDesdeSource(source string) canonico.EstadoMovimiento
+func monedaDesdeMonto(monto float64) canonico.Moneda
 func cuotasDesdeInstallments(s string) (actual, total int)
 ```
 
@@ -699,7 +699,7 @@ Do not introduce domain imports into the ETL helpers.
 **Step 4: Run tests**
 
 ```bash
-go test ./internal/cartola/ingest/obchile ./internal/cartola/obchile
+go test ./internal/cartola/canonico/obchile ./internal/cartola/obchile
 ```
 
 Expected: pass.
@@ -707,7 +707,7 @@ Expected: pass.
 **Step 5: Commit**
 
 ```bash
-git add internal/cartola/ingest/obchile internal/cartola/obchile
+git add internal/cartola/canonico/obchile internal/cartola/obchile
 git commit -m "refactor: normalize obchile movement facts in etl"
 ```
 

@@ -9,7 +9,7 @@ import (
 	_ "modernc.org/sqlite"
 	"presupuesto/internal/ajustes"
 	"presupuesto/internal/cartola/compuesto"
-	"presupuesto/internal/cartola/ingesta"
+	"presupuesto/internal/cartola/importacion"
 	"presupuesto/internal/cartola/obchile"
 	sqlitepkg "presupuesto/internal/cartola/sqlite"
 	"presupuesto/internal/config"
@@ -35,7 +35,7 @@ type App struct {
 	Proveedor       string
 	RepoConfigs     *config.RepoJSON
 	RepoCategorias  *config.RepoCategorias
-	RepoMovimientos ingesta.RepositorioMovimientos
+	RepoMovimientos importacion.RepositorioMovimientos
 	Adaptador       presupuesto.ProveedorFinanciero
 	Movimientos     presentacion.Presentador
 	DivisionesPath  string

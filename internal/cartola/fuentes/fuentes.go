@@ -1,20 +1,20 @@
-// Package fuentes centraliza la selección de fuentes de movimientos para ingesta.
+// Package fuentes centraliza la selección de fuentes de movimientos para importar.
 package fuentes
 
 import (
 	"fmt"
 	"path/filepath"
 
-	"presupuesto/internal/cartola/ingest"
-	"presupuesto/internal/cartola/ingest/bchile"
-	"presupuesto/internal/cartola/ingest/obcl"
+	"presupuesto/internal/cartola/canonico"
+	"presupuesto/internal/cartola/canonico/bchile"
+	"presupuesto/internal/cartola/canonico/obcl"
 )
 
 type OpenBankingChile struct {
 	JsonPath string
 }
 
-func (f OpenBankingChile) LeerMovimientos() ([]ingest.MovimientoBruto, error) {
+func (f OpenBankingChile) LeerMovimientos() ([]canonico.MovimientoBruto, error) {
 	brutos, err := obcl.LeerScraper(f.JsonPath)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ type CartolaBancoChile struct {
 	Dir   string
 }
 
-func (f CartolaBancoChile) LeerMovimientos() ([]ingest.MovimientoBruto, error) {
+func (f CartolaBancoChile) LeerMovimientos() ([]canonico.MovimientoBruto, error) {
 	parser, err := parserXLSX(f.Banco, f.Tipo)
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func (f CartolaBancoChile) LeerMovimientos() ([]ingest.MovimientoBruto, error) {
 		return nil, fmt.Errorf("ningún .xls en %s", f.Dir)
 	}
 
-	var batch []ingest.MovimientoBruto
+	var batch []canonico.MovimientoBruto
 	for _, a := range archivos {
 		movs, err := parser.Parsear(a, f.Anio)
 		if err != nil {

@@ -9,7 +9,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"presupuesto/internal/cartola/ingesta"
+	"presupuesto/internal/cartola/importacion"
 	sqlitepkg "presupuesto/internal/cartola/sqlite"
 )
 
@@ -35,7 +35,7 @@ func TestOpenBankingChile_PrimeraCarga(t *testing.T) {
 	_, db := openTempDB(t)
 	repo := sqlitepkg.NewWriter(db, "obcl")
 
-	insertados, err := ingesta.DesdeFuente(NuevaOpenBankingChile(jsonPath), repo)
+	insertados, err := importacion.DesdeFuente(NuevaOpenBankingChile(jsonPath), repo)
 	if err != nil {
 		t.Fatalf("DesdeFuente: %v", err)
 	}
@@ -77,10 +77,10 @@ func TestOpenBankingChile_EsIdempotente(t *testing.T) {
 	repo := sqlitepkg.NewWriter(db, "obcl")
 	fuente := NuevaOpenBankingChile(jsonPath)
 
-	if n, err := ingesta.DesdeFuente(fuente, repo); err != nil || n != 3 {
+	if n, err := importacion.DesdeFuente(fuente, repo); err != nil || n != 3 {
 		t.Fatalf("primera corrida: n=%d err=%v", n, err)
 	}
-	if n, err := ingesta.DesdeFuente(fuente, repo); err != nil || n != 0 {
+	if n, err := importacion.DesdeFuente(fuente, repo); err != nil || n != 0 {
 		t.Fatalf("segunda corrida: n=%d err=%v (esperaba 0)", n, err)
 	}
 
@@ -96,7 +96,7 @@ func TestOpenBankingChile_NoPersisteProvisorio(t *testing.T) {
 	_, db := openTempDB(t)
 	repo := sqlitepkg.NewWriter(db, "obcl")
 
-	insertados, err := ingesta.DesdeFuente(NuevaOpenBankingChile(jsonPath), repo)
+	insertados, err := importacion.DesdeFuente(NuevaOpenBankingChile(jsonPath), repo)
 	if err != nil {
 		t.Fatalf("DesdeFuente: %v", err)
 	}
