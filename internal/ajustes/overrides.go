@@ -13,6 +13,7 @@ import (
 //     en la misma moneda y signo que el monto original. nil = no hay split;
 //     un puntero a 0 significa "No contar".
 //   - Categoria: el id de categoría asignado a mano. "" = sin override de categoría.
+//   - Alias: descripción visible en UI. "" = mostrar descripción original.
 type Override struct {
 	MovimientoID  string   `json:"movimientoId,omitempty"`
 	Fecha         string   `json:"fecha"` // Formato ISO: yyyy-mm-dd
@@ -20,6 +21,7 @@ type Override struct {
 	Descripcion   string   `json:"descripcion"`
 	MiParte       *float64 `json:"miParte,omitempty"`
 	Categoria     string   `json:"categoria,omitempty"`
+	Alias         string   `json:"alias,omitempty"`
 }
 
 // LeerOverrides lee el archivo de ajustes locales, si existe.
@@ -57,6 +59,14 @@ func GuardarCategoria(ruta string, override Override) error {
 	})
 }
 
+// GuardarAlias inserta o actualiza la descripción visible del movimiento,
+// preservando sus ajustes contables. Alias="" limpia el alias.
+func GuardarAlias(ruta string, override Override) error {
+	return guardarOverride(ruta, override, func(actual *Override, nuevo Override) {
+		actual.Alias = nuevo.Alias
+	})
+}
+
 func guardarOverride(ruta string, override Override, aplicar func(*Override, Override)) error {
 	overrides, err := LeerOverrides(ruta)
 	if err != nil {
@@ -76,9 +86,16 @@ func guardarOverride(ruta string, override Override, aplicar func(*Override, Ove
 	}
 	if !found {
 		aplicar(&override, override)
+		if override.MiParte == nil && override.Categoria == "" && override.Alias == "" {
+			return escribirOverrides(ruta, overrides)
+		}
 		overrides = append(overrides, override)
 	}
 
+	return escribirOverrides(ruta, overrides)
+}
+
+func escribirOverrides(ruta string, overrides []Override) error {
 	data, err := json.MarshalIndent(overrides, "", "    ")
 	if err != nil {
 		return err
@@ -121,7 +138,10 @@ func MiParteOverride(movimientoID string, fechaISO string, montoOriginal float64
 // o "" si el movimiento no tiene alias.
 func DescripcionOverride(movimientoID string, fechaISO string, montoOriginal float64, descripcion string, overrides []Override) string {
 	if o, ok := buscarOverride(movimientoID, fechaISO, montoOriginal, descripcion, overrides); ok {
-		return o.Descripcion
+		if o.Alias == "" && o.MovimientoID != "" && o.Descripcion != "" && o.Descripcion != descripcion {
+			return o.Descripcion
+		}
+		return o.Alias
 	}
 	return ""
 }

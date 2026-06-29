@@ -11,13 +11,14 @@ type Presentador interface {
 
 // Movimiento es la vista estable que comparten las interfaces de usuario.
 type Movimiento struct {
-	ID          string   `json:"id"`
-	Fecha       string   `json:"fecha"`
-	Descripcion string   `json:"descripcion"`
-	Monto       float64  `json:"monto"`
-	IsUSD       bool     `json:"isUsd"`
-	MiParte     *float64 `json:"miParte,omitempty"`
-	CategoriaID string   `json:"categoriaId"`
+	ID                  string   `json:"id"`
+	Fecha               string   `json:"fecha"`
+	Descripcion         string   `json:"descripcion"`
+	DescripcionOriginal string   `json:"descripcionOriginal,omitempty"`
+	Monto               float64  `json:"monto"`
+	IsUSD               bool     `json:"isUsd"`
+	MiParte             *float64 `json:"miParte,omitempty"`
+	CategoriaID         string   `json:"categoriaId"`
 }
 
 // Movimientos aplica preferencias de presentación sin contaminar el dominio de
@@ -25,14 +26,20 @@ type Movimiento struct {
 func Movimientos(movs []presupuesto.Movimiento, overrides []ajustes.Override) []Movimiento {
 	vista := make([]Movimiento, 0, len(movs))
 	for _, m := range movs {
+		descripcion := descripcionMovimiento(m, overrides)
+		descripcionOriginal := ""
+		if descripcion != m.Descripcion {
+			descripcionOriginal = m.Descripcion
+		}
 		vista = append(vista, Movimiento{
-			ID:          m.ID,
-			Fecha:       m.Fecha.Format("2006-01-02"),
-			Descripcion: descripcionMovimiento(m, overrides),
-			Monto:       m.Monto,
-			IsUSD:       m.IsUSD,
-			MiParte:     m.MiParte,
-			CategoriaID: m.CategoriaID,
+			ID:                  m.ID,
+			Fecha:               m.Fecha.Format("2006-01-02"),
+			Descripcion:         descripcion,
+			DescripcionOriginal: descripcionOriginal,
+			Monto:               m.Monto,
+			IsUSD:               m.IsUSD,
+			MiParte:             m.MiParte,
+			CategoriaID:         m.CategoriaID,
 		})
 	}
 	return vista

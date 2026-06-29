@@ -207,6 +207,17 @@ body {
     margin-left: 0.5rem;
 }
 
+.mov-desc {
+    display: block;
+}
+
+.mov-original {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+
 /* Modal */
 .modal {
     display: none;
@@ -636,6 +647,12 @@ body {
 .form-control:focus {
     outline: none;
     border-color: var(--accent);
+}
+
+.form-hint {
+    display: block;
+    margin-top: 0.4rem;
+    color: var(--text-secondary);
 }
 
 /* Lista de categorías (pills por tipo) */
