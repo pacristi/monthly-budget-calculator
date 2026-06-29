@@ -189,7 +189,7 @@ const buildCategoriaSelect = (m) => {
         `<option value="${c.id}" ${c.id === m.categoriaId ? 'selected' : ''}>${c.nombre}</option>`
     );
     opciones.push(`<option value="${IGNORAR}" ${m.categoriaId === IGNORAR ? 'selected' : ''}>— ignorar —</option>`);
-    return `<select class="cat-select" onchange="setMovimientoCategoria(${jsString(m.fecha)}, ${jsValue(m.monto)}, ${jsString(m.descripcion)}, this.value)">${opciones.join('')}</select>`;
+    return `<select class="cat-select" onchange="setMovimientoCategoria(${jsString(m.fecha)}, ${jsValue(m.monto)}, ${jsString(m.descripcionOriginal || m.descripcion)}, this.value)">${opciones.join('')}</select>`;
 };
 
 window.setMovimientoCategoria = async (fecha, monto, descripcion, categoria) => {
@@ -227,6 +227,7 @@ const loadMovements = async () => {
                     badge = `<span class="badge">mi parte: ${formatCurrency(Math.abs(m.miParte), m.isUsd)}</span>`;
                 }
                 const miParteArg = m.miParte !== undefined && m.miParte !== null ? jsValue(m.miParte) : 'null';
+                const descripcionOriginal = m.descripcionOriginal || m.descripcion;
                 const original = m.descripcionOriginal ? `<span class="mov-original" title="${escapeHtml(m.descripcionOriginal)}">original: ${escapeHtml(m.descripcionOriginal)}</span>` : '';
                 tr.innerHTML = `
                     <td>${formatFecha(m.fecha)}</td>
@@ -237,10 +238,10 @@ const loadMovements = async () => {
                         <button class="btn btn-ghost btn-sm" onclick="openRenameModal(${jsString(m.id)}, ${jsString(m.fecha)}, ${jsValue(m.monto)}, ${jsString(m.descripcionOriginal || m.descripcion)}, ${jsString(m.descripcionOriginal ? m.descripcion : '')})">
                             Renombrar
                         </button>
-                        <button class="btn btn-primary btn-sm" onclick="openDivideModal(${jsString(m.fecha)}, ${jsString(m.descripcion)}, ${jsValue(m.monto)}, ${jsValue(m.isUsd || false)}, ${miParteArg})">
+                        <button class="btn btn-primary btn-sm" onclick="openDivideModal(${jsString(m.fecha)}, ${jsString(descripcionOriginal)}, ${jsValue(m.monto)}, ${jsValue(m.isUsd || false)}, ${miParteArg})">
                             Mi parte
                         </button>
-                        <button class="btn btn-secondary btn-sm" onclick="ignorarGasto(${jsString(m.fecha)}, ${jsString(m.descripcion)}, ${jsValue(m.monto)})" title="Marca este gasto como no contable (mi parte = 0)">
+                        <button class="btn btn-secondary btn-sm" onclick="ignorarGasto(${jsString(m.fecha)}, ${jsString(descripcionOriginal)}, ${jsValue(m.monto)})" title="Marca este gasto como no contable (mi parte = 0)">
                             No contar
                         </button>
                     </td>
