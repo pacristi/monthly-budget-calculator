@@ -10,6 +10,8 @@ import (
 
 func InstrumentoDeSource(source string) canonico.Instrumento {
 	switch source {
+	// The legacy/provisional adapter can still read rows persisted before the
+	// OBCL and XLSX flows were split, so it accepts both source vocabularies.
 	case "account", "cta_corriente":
 		return canonico.InstrumentoCuentaCorriente
 	case "credit_card_billed", "credit_card_unbilled", "tc_nacional", "tc_internacional":
