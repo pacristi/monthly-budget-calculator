@@ -1,4 +1,4 @@
-package bchile
+package parser
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/extrame/xls"
 
-	"presupuesto/internal/cartola/canonico"
+	"presupuesto/movimientos"
 )
 
 // TCNacional parsea cartolas mensuales de la tarjeta de crédito
@@ -24,7 +24,7 @@ func (p *TCNacional) Banco() string  { return "bchile" }
 func (p *TCNacional) Source() string { return "tc_nacional" }
 
 // Parsear ignora el año (las fechas vienen completas).
-func (p *TCNacional) Parsear(path string, _ int) ([]canonico.MovimientoBruto, error) {
+func (p *TCNacional) Parsear(path string, _ int) ([]movimientos.MovimientoBruto, error) {
 	filas, err := leerFilasTCN(path)
 	if err != nil {
 		return nil, fmt.Errorf("leyendo %s: %w", path, err)
@@ -75,8 +75,8 @@ func leerFilasTCN(path string) ([]filaTCN, error) {
 	return out, nil
 }
 
-func filasTCNAMovimientos(filas []filaTCN) ([]canonico.MovimientoBruto, error) {
-	var out []canonico.MovimientoBruto
+func filasTCNAMovimientos(filas []filaTCN) ([]movimientos.MovimientoBruto, error) {
+	var out []movimientos.MovimientoBruto
 
 	for _, f := range filas {
 		if esFilaTCNVacia(f) {
@@ -104,19 +104,19 @@ func filasTCNAMovimientos(filas []filaTCN) ([]canonico.MovimientoBruto, error) {
 
 		cuotaActual, cuotasTotales := parseCuotas(f.cuotas)
 		// En el xlsx cada fila trae el monto de UNA cuota, no el total.
-		representa := canonico.MontoRepresentaTotal
+		representa := movimientos.MontoRepresentaTotal
 		if cuotasTotales > 1 {
-			representa = canonico.MontoRepresentaCuota
+			representa = movimientos.MontoRepresentaCuota
 		}
 
-		out = append(out, canonico.MovimientoBruto{
+		out = append(out, movimientos.MovimientoBruto{
 			Banco:           "bchile",
 			Source:          "tc_nacional",
 			Fecha:           fecha,
 			Monto:           monto,
 			Descripcion:     f.descripcion,
-			Instrumento:     canonico.InstrumentoTarjetaCredito,
-			Moneda:          canonico.MonedaCLP,
+			Instrumento:     movimientos.InstrumentoTarjetaCredito,
+			Moneda:          movimientos.MonedaCLP,
 			MontoRepresenta: representa,
 			CuotaActual:     cuotaActual,
 			CuotasTotales:   cuotasTotales,

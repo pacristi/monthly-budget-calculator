@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode"
 
-	parserObcl "presupuesto/banco/open-banking-chile/parser"
+	parserObcl "presupuesto/ingesta/open-banking-chile"
 	"presupuesto/movimientos"
 )
 

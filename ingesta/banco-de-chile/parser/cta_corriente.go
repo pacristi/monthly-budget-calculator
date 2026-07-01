@@ -1,4 +1,4 @@
-package bchile
+package parser
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/extrame/xls"
 
-	"presupuesto/internal/cartola/canonico"
+	"presupuesto/movimientos"
 )
 
 // CuentaCorriente parsea cartolas mensuales de cuenta corriente de
@@ -28,7 +28,7 @@ func (p *CuentaCorriente) Banco() string  { return "bchile" }
 func (p *CuentaCorriente) Source() string { return "cta_corriente" }
 
 // Parsear lee el archivo .xls en `path` y devuelve los movimientos.
-func (p *CuentaCorriente) Parsear(path string, año int) ([]canonico.MovimientoBruto, error) {
+func (p *CuentaCorriente) Parsear(path string, año int) ([]movimientos.MovimientoBruto, error) {
 	filas, err := leerFilasCC(path)
 	if err != nil {
 		return nil, fmt.Errorf("leyendo %s: %w", path, err)
@@ -106,8 +106,8 @@ func parseFloat(s string) float64 {
 // filasAMovimientos es la capa pura: convierte filas crudas a MovimientoBruto
 // aplicando filtros (SALDO INICIAL, filas vacías, fechas inválidas) y la
 // regla de signo (cargo negativo, abono positivo).
-func filasAMovimientos(filas []filaCC, año int) ([]canonico.MovimientoBruto, error) {
-	var out []canonico.MovimientoBruto
+func filasAMovimientos(filas []filaCC, año int) ([]movimientos.MovimientoBruto, error) {
+	var out []movimientos.MovimientoBruto
 
 	for _, f := range filas {
 		if esFilaVacia(f) {
@@ -128,15 +128,15 @@ func filasAMovimientos(filas []filaCC, año int) ([]canonico.MovimientoBruto, er
 			continue
 		}
 
-		out = append(out, canonico.MovimientoBruto{
+		out = append(out, movimientos.MovimientoBruto{
 			Banco:           "bchile",
 			Source:          "cta_corriente",
 			Fecha:           fecha,
 			Monto:           monto,
 			Descripcion:     f.descripcion,
-			Instrumento:     canonico.InstrumentoCuentaCorriente,
-			Moneda:          canonico.MonedaCLP,
-			MontoRepresenta: canonico.MontoRepresentaTotal,
+			Instrumento:     movimientos.InstrumentoCuentaCorriente,
+			Moneda:          movimientos.MonedaCLP,
+			MontoRepresenta: movimientos.MontoRepresentaTotal,
 			CuotaActual:     1,
 			CuotasTotales:   1,
 			IsUSD:           false,

@@ -1,4 +1,4 @@
-package obcl
+package openbankingchile
 
 import (
 	"encoding/json"

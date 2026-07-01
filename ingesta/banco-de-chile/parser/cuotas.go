@@ -1,4 +1,4 @@
-package bchile
+package parser
 
 import (
 	"strconv"

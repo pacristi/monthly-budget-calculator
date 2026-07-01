@@ -1,4 +1,4 @@
-package bchile
+package parser
 
 import "github.com/extrame/xls"
 

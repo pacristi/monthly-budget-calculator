@@ -1,9 +1,9 @@
-package bchile
+package parser
 
 import (
 	"testing"
 
-	"presupuesto/internal/cartola/canonico"
+	"presupuesto/movimientos"
 )
 
 func TestCtaCorriente_HechosCanonicos(t *testing.T) {
@@ -12,14 +12,14 @@ func TestCtaCorriente_HechosCanonicos(t *testing.T) {
 	}, 2025)
 	m := movs[0]
 
-	if m.Instrumento != canonico.InstrumentoCuentaCorriente {
-		t.Errorf("Instrumento = %q, quiero %q", m.Instrumento, canonico.InstrumentoCuentaCorriente)
+	if m.Instrumento != movimientos.InstrumentoCuentaCorriente {
+		t.Errorf("Instrumento = %q, quiero %q", m.Instrumento, movimientos.InstrumentoCuentaCorriente)
 	}
-	if m.Moneda != canonico.MonedaCLP {
-		t.Errorf("Moneda = %q, quiero %q", m.Moneda, canonico.MonedaCLP)
+	if m.Moneda != movimientos.MonedaCLP {
+		t.Errorf("Moneda = %q, quiero %q", m.Moneda, movimientos.MonedaCLP)
 	}
-	if m.MontoRepresenta != canonico.MontoRepresentaTotal {
-		t.Errorf("MontoRepresenta = %q, quiero %q", m.MontoRepresenta, canonico.MontoRepresentaTotal)
+	if m.MontoRepresenta != movimientos.MontoRepresentaTotal {
+		t.Errorf("MontoRepresenta = %q, quiero %q", m.MontoRepresenta, movimientos.MontoRepresentaTotal)
 	}
 	if m.CuotaActual != 1 || m.CuotasTotales != 1 {
 		t.Errorf("cuotas = (%d,%d), quiero (1,1)", m.CuotaActual, m.CuotasTotales)
@@ -35,14 +35,14 @@ func TestTCInternacional_HechosCanonicos(t *testing.T) {
 	})
 	m := movs[0]
 
-	if m.Instrumento != canonico.InstrumentoTarjetaCredito {
-		t.Errorf("Instrumento = %q, quiero %q", m.Instrumento, canonico.InstrumentoTarjetaCredito)
+	if m.Instrumento != movimientos.InstrumentoTarjetaCredito {
+		t.Errorf("Instrumento = %q, quiero %q", m.Instrumento, movimientos.InstrumentoTarjetaCredito)
 	}
-	if m.Moneda != canonico.MonedaUSD {
-		t.Errorf("Moneda = %q, quiero %q", m.Moneda, canonico.MonedaUSD)
+	if m.Moneda != movimientos.MonedaUSD {
+		t.Errorf("Moneda = %q, quiero %q", m.Moneda, movimientos.MonedaUSD)
 	}
-	if m.MontoRepresenta != canonico.MontoRepresentaTotal {
-		t.Errorf("MontoRepresenta = %q, quiero %q", m.MontoRepresenta, canonico.MontoRepresentaTotal)
+	if m.MontoRepresenta != movimientos.MontoRepresentaTotal {
+		t.Errorf("MontoRepresenta = %q, quiero %q", m.MontoRepresenta, movimientos.MontoRepresentaTotal)
 	}
 	if m.CuotaActual != 1 || m.CuotasTotales != 1 {
 		t.Errorf("cuotas = (%d,%d), quiero (1,1)", m.CuotaActual, m.CuotasTotales)
@@ -61,17 +61,17 @@ func TestTCNacional_HechosCanonicos(t *testing.T) {
 
 	t.Run("compra en cuotas 02/03 -> el monto representa una cuota", func(t *testing.T) {
 		m := movs[0]
-		if m.Instrumento != canonico.InstrumentoTarjetaCredito {
-			t.Errorf("Instrumento = %q, quiero %q", m.Instrumento, canonico.InstrumentoTarjetaCredito)
+		if m.Instrumento != movimientos.InstrumentoTarjetaCredito {
+			t.Errorf("Instrumento = %q, quiero %q", m.Instrumento, movimientos.InstrumentoTarjetaCredito)
 		}
-		if m.Moneda != canonico.MonedaCLP {
-			t.Errorf("Moneda = %q, quiero %q", m.Moneda, canonico.MonedaCLP)
+		if m.Moneda != movimientos.MonedaCLP {
+			t.Errorf("Moneda = %q, quiero %q", m.Moneda, movimientos.MonedaCLP)
 		}
 		if m.CuotaActual != 2 || m.CuotasTotales != 3 {
 			t.Errorf("cuotas = (%d,%d), quiero (2,3)", m.CuotaActual, m.CuotasTotales)
 		}
-		if m.MontoRepresenta != canonico.MontoRepresentaCuota {
-			t.Errorf("MontoRepresenta = %q, quiero %q (CuotasTotales>1)", m.MontoRepresenta, canonico.MontoRepresentaCuota)
+		if m.MontoRepresenta != movimientos.MontoRepresentaCuota {
+			t.Errorf("MontoRepresenta = %q, quiero %q (CuotasTotales>1)", m.MontoRepresenta, movimientos.MontoRepresentaCuota)
 		}
 		if m.IsUSD || m.Cuotas != "02/03" {
 			t.Errorf("legacy mal: IsUSD=%v Cuotas=%q", m.IsUSD, m.Cuotas)
@@ -83,8 +83,8 @@ func TestTCNacional_HechosCanonicos(t *testing.T) {
 		if m.CuotaActual != 1 || m.CuotasTotales != 1 {
 			t.Errorf("cuotas = (%d,%d), quiero (1,1)", m.CuotaActual, m.CuotasTotales)
 		}
-		if m.MontoRepresenta != canonico.MontoRepresentaTotal {
-			t.Errorf("MontoRepresenta = %q, quiero %q (CuotasTotales==1)", m.MontoRepresenta, canonico.MontoRepresentaTotal)
+		if m.MontoRepresenta != movimientos.MontoRepresentaTotal {
+			t.Errorf("MontoRepresenta = %q, quiero %q (CuotasTotales==1)", m.MontoRepresenta, movimientos.MontoRepresentaTotal)
 		}
 		if m.Cuotas != "01/01" {
 			t.Errorf("legacy Cuotas = %q, quiero %q", m.Cuotas, "01/01")

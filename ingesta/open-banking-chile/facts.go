@@ -1,21 +1,21 @@
-package obcl
+package openbankingchile
 
 import (
 	"math"
 	"strconv"
 	"strings"
 
-	"presupuesto/internal/cartola/canonico"
+	"presupuesto/movimientos"
 )
 
-func InstrumentoDeSource(source string) canonico.Instrumento {
+func InstrumentoDeSource(source string) movimientos.Instrumento {
 	switch source {
 	case "account":
-		return canonico.InstrumentoCuentaCorriente
+		return movimientos.InstrumentoCuentaCorriente
 	case "credit_card_billed", "credit_card_unbilled":
-		return canonico.InstrumentoTarjetaCredito
+		return movimientos.InstrumentoTarjetaCredito
 	default:
-		return canonico.InstrumentoDesconocido
+		return movimientos.InstrumentoDesconocido
 	}
 }
 
@@ -23,11 +23,11 @@ func EsProvisorio(source string) bool {
 	return strings.Contains(strings.ToLower(source), "unbilled")
 }
 
-func MonedaDeMonto(monto float64) canonico.Moneda {
+func MonedaDeMonto(monto float64) movimientos.Moneda {
 	if math.Trunc(monto) != monto {
-		return canonico.MonedaUSD
+		return movimientos.MonedaUSD
 	}
-	return canonico.MonedaCLP
+	return movimientos.MonedaCLP
 }
 
 func CuotasDeInstallments(installments string) (actual, total int) {

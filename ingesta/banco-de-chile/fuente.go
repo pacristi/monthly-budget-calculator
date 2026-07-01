@@ -1,25 +1,14 @@
-// Package fuentes centraliza la selección de fuentes de movimientos para importar.
-package fuentes
+// Package bancodechile expone la fuente de movimientos de cartolas XLSX del
+// Banco de Chile.
+package bancodechile
 
 import (
 	"fmt"
 	"path/filepath"
 
+	parserBchile "presupuesto/ingesta/banco-de-chile/parser"
 	"presupuesto/movimientos"
-	parserBchile "presupuesto/banco/banco-de-chile/parser"
-	parserObcl "presupuesto/banco/open-banking-chile/parser"
 )
-
-type OpenBankingChile struct {
-	JsonPath string
-}
-
-func (f OpenBankingChile) LeerMovimientos() ([]movimientos.MovimientoBruto, error) {
-	// Entrega TODO (billed + unbilled) sin filtrar: storage/sqlite.Writer
-	// decide cómo persistir cada uno (dedup para liquidados, replace
-	// completo para provisorios).
-	return parserObcl.LeerScraper(f.JsonPath)
-}
 
 type CartolaBancoChile struct {
 	Banco string
@@ -51,10 +40,6 @@ func (f CartolaBancoChile) LeerMovimientos() ([]movimientos.MovimientoBruto, err
 		batch = append(batch, movs...)
 	}
 	return batch, nil
-}
-
-func NuevaOpenBankingChile(jsonPath string) OpenBankingChile {
-	return OpenBankingChile{JsonPath: jsonPath}
 }
 
 func NuevaCartolaXLSX(banco, tipo string, anio int, dir string) (CartolaBancoChile, error) {
