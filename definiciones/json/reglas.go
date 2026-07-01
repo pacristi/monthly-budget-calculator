@@ -1,10 +1,10 @@
-package ajustes
+package defjson
 
 import (
 	"encoding/json"
 	"os"
 
-	"presupuesto/internal/presupuesto"
+	"presupuesto/presupuesto"
 )
 
 // LeerReglas lee el archivo de reglas de categorización, con formato
@@ -39,7 +39,7 @@ func EscribirReglas(ruta string, reglas []presupuesto.Regla) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(ruta, data, 0644)
+	return escribirArchivoAtomico(ruta, data)
 }
 
 // MigrarExclusionesAReglas convierte la vieja lista de substrings a ignorar en
@@ -100,5 +100,5 @@ func EscribirListaStrings(ruta string, lista []string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(ruta, data, 0644)
+	return escribirArchivoAtomico(ruta, data)
 }

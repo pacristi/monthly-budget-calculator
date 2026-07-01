@@ -4,9 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"presupuesto/internal/ajustes"
-	"presupuesto/internal/presentacion"
-	"presupuesto/internal/presupuesto"
+	"presupuesto/cmd/cli/presentacion"
+	"presupuesto/presupuesto"
 )
 
 func TestMovimientosAplicaAliasDesdeOverrides(t *testing.T) {
@@ -18,7 +17,7 @@ func TestMovimientosAplicaAliasDesdeOverrides(t *testing.T) {
 		Monto:       -3500,
 		CategoriaID: "comida",
 	}}
-	overrides := []ajustes.Override{{
+	overrides := []presupuesto.Override{{
 		MovimientoID:  "sql-1",
 		Fecha:         "2026-05-15",
 		MontoOriginal: -3500,

@@ -1,10 +1,10 @@
-package config
+package defjson
 
 import (
 	"path/filepath"
 	"testing"
 
-	"presupuesto/internal/presupuesto"
+	"presupuesto/presupuesto"
 )
 
 func TestRepoCategorias_ArchivoAusenteDevuelveGastoPorDefecto(t *testing.T) {

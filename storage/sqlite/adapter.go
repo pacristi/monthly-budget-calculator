@@ -2,17 +2,14 @@ package sqlite
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"math"
-	"os"
-	"strings"
 	"time"
 
-	repojson "presupuesto/storage/json"
+	"presupuesto/cmd/cli/presentacion"
+	defjson "presupuesto/definiciones/json"
 	"presupuesto/movimientos"
 	"presupuesto/movimientos/shared"
-	"presupuesto/cmd/cli/presentacion"
 	"presupuesto/presupuesto"
 )
 
@@ -22,22 +19,22 @@ import (
 // de un JSON puntual.
 type Adapter struct {
 	db             *sql.DB
-	overrides      []repojson.Override
+	overrides      []presupuesto.Override
 	reglas         []presupuesto.Regla
 	patronesSueldo []string
-	rutaManuales   string
+	manuales       *defjson.RepoGastosManuales
 	resolvedor     presupuesto.ResolvedorConfig
 }
 
 func NewAdapter(db *sql.DB, rutaDivisiones string, reglas []presupuesto.Regla, rutaSueldo, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
-	overrides, _ := repojson.LeerOverrides(rutaDivisiones)
-	patronesSueldo, _ := repojson.LeerListaStrings(rutaSueldo)
+	overrides, _ := defjson.LeerOverrides(rutaDivisiones)
+	patronesSueldo, _ := defjson.LeerListaStrings(rutaSueldo)
 	return &Adapter{
 		db:             db,
 		overrides:      overrides,
 		reglas:         reglas,
 		patronesSueldo: patronesSueldo,
-		rutaManuales:   rutaManuales,
+		manuales:       defjson.NewRepoGastosManuales(rutaManuales, resolvedor),
 		resolvedor:     resolvedor,
 	}
 }
@@ -124,7 +121,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 		movimientoID := fmt.Sprintf("sql-%d", id)
 
 		// Clasificar: override manual > regla por patrón > categoría default.
-		overrideCat := repojson.CategoriaOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
+		overrideCat := presupuesto.CategoriaOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
 		categoria := presupuesto.Clasificar(descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 		if categoria == presupuesto.Ignorado {
 			continue
@@ -135,7 +132,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 			return nil, fmt.Errorf("resolviendo config %s: %w", fechaISO, err)
 		}
 
-		montoCrudo := repojson.AplicarOverrides(movimientoID, monto, fechaISO, descripcion, a.overrides)
+		montoCrudo := presupuesto.AplicarOverrides(movimientoID, monto, fechaISO, descripcion, a.overrides)
 		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, movimientos.Moneda(moneda) == movimientos.MonedaUSD, cfg.TasaCambioUSD))
 
 		tipo := presupuesto.Debito
@@ -162,7 +159,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 		return nil, err
 	}
 
-	manuales, err := a.leerGastosManuales()
+	manuales, err := a.manuales.Listar()
 	if err != nil {
 		return nil, err
 	}
@@ -195,9 +192,9 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 		}
 
 		movimientoID := fmt.Sprintf("sql-%d", id)
-		miParte := repojson.MiParteOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
+		miParte := presupuesto.MiParteOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
 
-		overrideCat := repojson.CategoriaOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
+		overrideCat := presupuesto.CategoriaOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
 		categoria := presupuesto.Clasificar(descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 
 		out = append(out, presupuesto.Movimiento{
@@ -222,54 +219,4 @@ func (a *Adapter) PresentarMovimientos() ([]presentacion.Movimiento, error) {
 		return nil, err
 	}
 	return presentacion.Movimientos(movs, a.overrides), nil
-}
-
-func (a *Adapter) leerGastosManuales() ([]presupuesto.Gasto, error) {
-	if a.rutaManuales == "" {
-		return nil, nil
-	}
-	data, err := os.ReadFile(a.rutaManuales)
-	if err != nil {
-		return nil, nil // tolerar archivo ausente
-	}
-	var dtos []manualDTO
-	if err := json.Unmarshal(data, &dtos); err != nil {
-		return nil, nil
-	}
-	var out []presupuesto.Gasto
-	for _, dto := range dtos {
-		fechaTransaccion, err := time.Parse("02-01-2006", dto.FechaInicio)
-		if err != nil {
-			continue
-		}
-		cfg, err := a.resolvedor.ParaMes(fechaTransaccion)
-		if err != nil {
-			return nil, err
-		}
-		tipo := presupuesto.Debito
-		diaCorte := 0
-		if strings.ToLower(dto.TipoPago) == "credito" {
-			tipo = presupuesto.Credito
-			diaCorte = cfg.DiaDeCorteCredito
-		}
-		out = append(out, presupuesto.Gasto{
-			ID:               dto.ID,
-			Descripcion:      dto.Descripcion,
-			MontoImputado:    dto.MontoTotal,
-			Cuotas:           dto.CuotasTotales,
-			FechaTransaccion: fechaTransaccion,
-			PoliticaCorte:    presupuesto.PoliticaCorte{Tipo: tipo, DiaDeCorte: diaCorte},
-			CategoriaID:      presupuesto.CategoriaPorDefecto,
-		})
-	}
-	return out, nil
-}
-
-type manualDTO struct {
-	ID            string  `json:"id"`
-	Descripcion   string  `json:"descripcion"`
-	MontoTotal    float64 `json:"montoTotal"`
-	CuotasTotales int     `json:"cuotasTotales"`
-	FechaInicio   string  `json:"fechaInicio"`
-	TipoPago      string  `json:"tipoPago"`
 }

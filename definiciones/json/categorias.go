@@ -1,13 +1,12 @@
-package config
+package defjson
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 
-	"presupuesto/internal/presupuesto"
+	"presupuesto/presupuesto"
 )
 
 // RepoCategorias persiste la lista global de categorías en un JSON.
@@ -67,27 +66,5 @@ func (r *RepoCategorias) Guardar(cats []presupuesto.Categoria) error {
 		return fmt.Errorf("serializando categorías: %w", err)
 	}
 
-	dir := filepath.Dir(r.ruta)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("creando dir %s: %w", dir, err)
-	}
-	tmp, err := os.CreateTemp(dir, ".categorias-*.json.tmp")
-	if err != nil {
-		return fmt.Errorf("creando temp file: %w", err)
-	}
-	tmpPath := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
-		return fmt.Errorf("escribiendo temp: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("cerrando temp: %w", err)
-	}
-	if err := os.Rename(tmpPath, r.ruta); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("renombrando temp a destino: %w", err)
-	}
-	return nil
+	return escribirArchivoAtomico(r.ruta, data)
 }

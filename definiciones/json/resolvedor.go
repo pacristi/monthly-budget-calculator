@@ -1,11 +1,11 @@
-package config
+package defjson
 
 import (
 	"fmt"
 	"sort"
 	"time"
 
-	"presupuesto/internal/presupuesto"
+	"presupuesto/presupuesto"
 )
 
 // ResolverParaMes encuentra la config aplicable para el mes dado, usando carry-forward:

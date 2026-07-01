@@ -1,9 +1,4 @@
-package json
-
-import (
-	"encoding/json"
-	"os"
-)
+package presupuesto
 
 // Override representa ajustes manuales del usuario sobre un movimiento. La
 // clave principal es MovimientoID; la terna legacy se conserva solo para leer y
@@ -22,85 +17,6 @@ type Override struct {
 	MiParte       *float64 `json:"miParte,omitempty"`
 	Categoria     string   `json:"categoria,omitempty"`
 	Alias         string   `json:"alias,omitempty"`
-}
-
-// LeerOverrides lee el archivo de ajustes locales, si existe.
-func LeerOverrides(ruta string) ([]Override, error) {
-	if ruta == "" {
-		return []Override{}, nil
-	}
-	data, err := os.ReadFile(ruta)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []Override{}, nil
-		}
-		return []Override{}, nil
-	}
-	var overrides []Override
-	if err := json.Unmarshal(data, &overrides); err != nil {
-		return nil, err
-	}
-	return overrides, nil
-}
-
-// GuardarMiParte inserta o actualiza el ajuste de split de un movimiento,
-// preservando su categoría manual si ya existía.
-func GuardarMiParte(ruta string, override Override) error {
-	return guardarOverride(ruta, override, func(actual *Override, nuevo Override) {
-		actual.MiParte = nuevo.MiParte
-	})
-}
-
-// GuardarCategoria inserta o actualiza la categoría manual de un movimiento,
-// preservando su split si ya existía. Categoria="" limpia la categoría manual.
-func GuardarCategoria(ruta string, override Override) error {
-	return guardarOverride(ruta, override, func(actual *Override, nuevo Override) {
-		actual.Categoria = nuevo.Categoria
-	})
-}
-
-// GuardarAlias inserta o actualiza la descripción visible del movimiento,
-// preservando sus ajustes contables. Alias="" limpia el alias.
-func GuardarAlias(ruta string, override Override) error {
-	return guardarOverride(ruta, override, func(actual *Override, nuevo Override) {
-		actual.Alias = nuevo.Alias
-	})
-}
-
-func guardarOverride(ruta string, override Override, aplicar func(*Override, Override)) error {
-	overrides, err := LeerOverrides(ruta)
-	if err != nil {
-		overrides = []Override{}
-	}
-
-	found := false
-	for i := range overrides {
-		if mismoMovimiento(overrides[i], override) || mismaTerna(overrides[i], override) {
-			aplicar(&overrides[i], override)
-			if override.MovimientoID != "" {
-				overrides[i].MovimientoID = override.MovimientoID
-			}
-			found = true
-			break
-		}
-	}
-	if !found {
-		aplicar(&override, override)
-		if override.MiParte == nil && override.Categoria == "" && override.Alias == "" {
-			return escribirOverrides(ruta, overrides)
-		}
-		overrides = append(overrides, override)
-	}
-
-	return escribirOverrides(ruta, overrides)
-}
-
-func escribirOverrides(ruta string, overrides []Override) error {
-	data, err := json.MarshalIndent(overrides, "", "    ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(ruta, data, 0644)
 }
 
 // AplicarOverrides devuelve el monto crudo a imputar: "mi parte" si hay un
@@ -172,4 +88,13 @@ func mismoMovimiento(a, b Override) bool {
 
 func mismaTerna(a, b Override) bool {
 	return a.Fecha == b.Fecha && a.MontoOriginal == b.MontoOriginal && a.Descripcion == b.Descripcion
+}
+
+// MismoOverrideObjetivo indica si dos overrides identifican al mismo
+// movimiento: por MovimientoID si ambos lo tienen, o por la terna legacy
+// (fecha + monto + descripción) como fallback. Lo usa el repo de I/O
+// (definiciones/json) para decidir si actualiza un registro existente o
+// agrega uno nuevo al guardar.
+func MismoOverrideObjetivo(a, b Override) bool {
+	return mismoMovimiento(a, b) || mismaTerna(a, b)
 }

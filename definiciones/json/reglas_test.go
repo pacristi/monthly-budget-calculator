@@ -1,11 +1,11 @@
-package ajustes
+package defjson
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"presupuesto/internal/presupuesto"
+	"presupuesto/presupuesto"
 )
 
 func TestMigrarExclusionesAReglas(t *testing.T) {

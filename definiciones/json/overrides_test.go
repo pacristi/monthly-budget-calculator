@@ -1,93 +1,17 @@
-package json
+package defjson
 
-import "testing"
+import (
+	"testing"
+
+	"presupuesto/presupuesto"
+)
 
 func ptrF(f float64) *float64 { return &f }
-
-func TestAplicarOverrides_PriorizaMovimientoID(t *testing.T) {
-	overrides := []Override{
-		{MovimientoID: "sql-1", Fecha: "2025-05-15", MontoOriginal: -3500, Descripcion: "Starbucks café AM", MiParte: ptrF(-1750)},
-		{MovimientoID: "sql-2", Fecha: "2025-05-15", MontoOriginal: -3500, Descripcion: "Starbucks café AM", MiParte: ptrF(-500)},
-	}
-
-	got := AplicarOverrides("sql-2", -3500, "2025-05-15", "Starbucks café AM", overrides)
-	if got != -500 {
-		t.Fatalf("esperaba override por movimiento_id -500, obtuve %v", got)
-	}
-}
-
-func TestAplicarOverrides_FallbackLegacyConMovimientoIDViejo(t *testing.T) {
-	overrides := []Override{
-		{MovimientoID: "sql-1", Fecha: "2025-05-15", MontoOriginal: -3500, Descripcion: "Starbucks café AM", MiParte: ptrF(-1750)},
-	}
-
-	got := AplicarOverrides("sql-50", -3500, "2025-05-15", "Starbucks café AM", overrides)
-	if got != -1750 {
-		t.Fatalf("esperaba fallback por terna con movimiento_id viejo, obtuve %v", got)
-	}
-}
-
-func TestAplicarOverrides_FallbackLegacyPorFechaMontoYDescripcion(t *testing.T) {
-	overrides := []Override{
-		{Fecha: "2025-05-15", MontoOriginal: -3500, Descripcion: "Starbucks café AM", MiParte: ptrF(-1750)},
-	}
-
-	t.Run("matchea cuando fecha, monto y descripción coinciden", func(t *testing.T) {
-		got := AplicarOverrides("sql-1", -3500, "2025-05-15", "Starbucks café AM", overrides)
-		if got != -1750 {
-			t.Errorf("esperaba -1750 (mi parte), obtuve %v", got)
-		}
-	})
-
-	t.Run("NO matchea si la descripción es distinta", func(t *testing.T) {
-		got := AplicarOverrides("sql-1", -3500, "2025-05-15", "Starbucks café PM", overrides)
-		if got != -3500 {
-			t.Errorf("esperaba -3500 (monto original sin override), obtuve %v", got)
-		}
-	})
-
-	t.Run("NO matchea si el override tiene descripción vacía", func(t *testing.T) {
-		emptyDescOverrides := []Override{
-			{Fecha: "2025-05-15", MontoOriginal: -3500, Descripcion: "", MiParte: ptrF(-1750)},
-		}
-		got := AplicarOverrides("sql-1", -3500, "2025-05-15", "Starbucks café AM", emptyDescOverrides)
-		if got != -3500 {
-			t.Errorf("override con Descripcion vacía no debería matchear; esperaba -3500, obtuve %v", got)
-		}
-	})
-
-	t.Run("NO matchea si la descripción del movimiento es vacía", func(t *testing.T) {
-		got := AplicarOverrides("sql-1", -3500, "2025-05-15", "", overrides)
-		if got != -3500 {
-			t.Errorf("movimiento con descripcion vacía no debería matchear un override con descripción; esperaba -3500, obtuve %v", got)
-		}
-	})
-
-	t.Run("MiParte=0 (No contar) sigue imputando 0", func(t *testing.T) {
-		noContar := []Override{
-			{Fecha: "2025-05-15", MontoOriginal: -3500, Descripcion: "Starbucks café AM", MiParte: ptrF(0)},
-		}
-		got := AplicarOverrides("sql-1", -3500, "2025-05-15", "Starbucks café AM", noContar)
-		if got != 0 {
-			t.Errorf("MiParte=0 debería imputar 0 (No contar), obtuve %v", got)
-		}
-	})
-
-	t.Run("MiParte nil (override solo de categoría) NO toca el monto", func(t *testing.T) {
-		soloCategoria := []Override{
-			{Fecha: "2025-05-15", MontoOriginal: -3500, Descripcion: "Starbucks café AM", MiParte: nil, Categoria: "ahorro"},
-		}
-		got := AplicarOverrides("sql-1", -3500, "2025-05-15", "Starbucks café AM", soloCategoria)
-		if got != -3500 {
-			t.Errorf("override sin MiParte no debería cambiar el monto; esperaba -3500, obtuve %v", got)
-		}
-	})
-}
 
 func TestGuardarMiPartePreservaCategoria(t *testing.T) {
 	ruta := t.TempDir() + "/overrides.json"
 
-	if err := GuardarCategoria(ruta, Override{
+	if err := GuardarCategoria(ruta, presupuesto.Override{
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
 		Descripcion:   "Starbucks café AM",
@@ -96,7 +20,7 @@ func TestGuardarMiPartePreservaCategoria(t *testing.T) {
 		t.Fatalf("guardando categoría: %v", err)
 	}
 
-	if err := GuardarMiParte(ruta, Override{
+	if err := GuardarMiParte(ruta, presupuesto.Override{
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
 		Descripcion:   "Starbucks café AM",
@@ -124,7 +48,7 @@ func TestGuardarAliasPreservaAjustesContables(t *testing.T) {
 	ruta := t.TempDir() + "/overrides.json"
 	miParte := -1750.0
 
-	if err := GuardarMiParte(ruta, Override{
+	if err := GuardarMiParte(ruta, presupuesto.Override{
 		MovimientoID:  "sql-42",
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
@@ -135,7 +59,7 @@ func TestGuardarAliasPreservaAjustesContables(t *testing.T) {
 		t.Fatalf("guardando mi parte: %v", err)
 	}
 
-	if err := GuardarAlias(ruta, Override{
+	if err := GuardarAlias(ruta, presupuesto.Override{
 		MovimientoID:  "sql-42",
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
@@ -169,7 +93,7 @@ func TestGuardarAliasPreservaAjustesContables(t *testing.T) {
 func TestGuardarMiParteMatcheaPorMovimientoIDAunqueCambieDescripcion(t *testing.T) {
 	ruta := t.TempDir() + "/overrides.json"
 
-	if err := GuardarCategoria(ruta, Override{
+	if err := GuardarCategoria(ruta, presupuesto.Override{
 		MovimientoID:  "sql-42",
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
@@ -179,7 +103,7 @@ func TestGuardarMiParteMatcheaPorMovimientoIDAunqueCambieDescripcion(t *testing.
 		t.Fatalf("guardando categoría: %v", err)
 	}
 
-	if err := GuardarMiParte(ruta, Override{
+	if err := GuardarMiParte(ruta, presupuesto.Override{
 		MovimientoID:  "sql-42",
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
@@ -210,7 +134,7 @@ func TestGuardarMiParteMatcheaPorMovimientoIDAunqueCambieDescripcion(t *testing.
 func TestGuardarMiParteActualizaMovimientoIDViejoPorTerna(t *testing.T) {
 	ruta := t.TempDir() + "/overrides.json"
 
-	if err := GuardarCategoria(ruta, Override{
+	if err := GuardarCategoria(ruta, presupuesto.Override{
 		MovimientoID:  "sql-1",
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
@@ -220,7 +144,7 @@ func TestGuardarMiParteActualizaMovimientoIDViejoPorTerna(t *testing.T) {
 		t.Fatalf("guardando categoría: %v", err)
 	}
 
-	if err := GuardarMiParte(ruta, Override{
+	if err := GuardarMiParte(ruta, presupuesto.Override{
 		MovimientoID:  "sql-50",
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
@@ -251,7 +175,7 @@ func TestGuardarMiParteActualizaMovimientoIDViejoPorTerna(t *testing.T) {
 func TestGuardarCategoriaPermiteLimpiarCategoria(t *testing.T) {
 	ruta := t.TempDir() + "/overrides.json"
 
-	if err := GuardarMiParte(ruta, Override{
+	if err := GuardarMiParte(ruta, presupuesto.Override{
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
 		Descripcion:   "Starbucks café AM",
@@ -260,7 +184,7 @@ func TestGuardarCategoriaPermiteLimpiarCategoria(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("guardando mi parte: %v", err)
 	}
-	if err := GuardarCategoria(ruta, Override{
+	if err := GuardarCategoria(ruta, presupuesto.Override{
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
 		Descripcion:   "Starbucks café AM",
@@ -269,7 +193,7 @@ func TestGuardarCategoriaPermiteLimpiarCategoria(t *testing.T) {
 		t.Fatalf("guardando categoría: %v", err)
 	}
 
-	if err := GuardarCategoria(ruta, Override{
+	if err := GuardarCategoria(ruta, presupuesto.Override{
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
 		Descripcion:   "Starbucks café AM",

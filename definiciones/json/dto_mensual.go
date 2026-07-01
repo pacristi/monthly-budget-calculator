@@ -1,10 +1,10 @@
-package config
+package defjson
 
 import (
 	"fmt"
 	"time"
 
-	"presupuesto/internal/presupuesto"
+	"presupuesto/presupuesto"
 )
 
 // ConfigMensual es la representación persistida de una config: el mes desde
