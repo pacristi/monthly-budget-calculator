@@ -16,7 +16,6 @@ func (f fakeProveedor) ObtenerSueldoBase(PeriodoPresupuestario) (float64, error)
 func (f fakeProveedor) ObtenerGastosValidos(PeriodoPresupuestario) ([]Gasto, error) {
 	return f.gastos, nil
 }
-func (f fakeProveedor) ObtenerMovimientos() ([]Movimiento, error) { return nil, nil }
 
 type fakeResolvedor struct{ cfg ConfigPresupuesto }
 

@@ -4,5 +4,4 @@ package presupuesto
 type ProveedorFinanciero interface {
 	ObtenerSueldoBase(periodo PeriodoPresupuestario) (float64, error)
 	ObtenerGastosValidos(periodo PeriodoPresupuestario) ([]Gasto, error)
-	ObtenerMovimientos() ([]Movimiento, error)
 }
