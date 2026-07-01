@@ -10,7 +10,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"presupuesto/internal/presupuesto"
+	"presupuesto/presupuesto"
 )
 
 type fakeResolvedor struct {

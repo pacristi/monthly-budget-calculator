@@ -12,7 +12,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	
-	sqlitepkg "presupuesto/storage/sqlite"
+	sqlitepkg "presupuesto/movimientos/sqlite"
 )
 
 func TestOpenBankingChile_EntregaProvisoriosYLiquidados(t *testing.T) {

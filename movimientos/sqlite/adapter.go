@@ -70,26 +70,16 @@ func (a *Adapter) buscarSueldoEnRango(ini, fin time.Time) (float64, bool, error)
 	if len(a.patronesSueldo) == 0 {
 		return 0, false, nil
 	}
-	rows, err := a.db.Query(`SELECT fecha, monto, descripcion FROM movimientos
-		WHERE fecha BETWEEN ? AND ? AND monto > 0
-		ORDER BY fecha DESC`,
-		ini.Format("2006-01-02"), fin.Format("2006-01-02"),
-	)
+	abonos, err := Abonos(a.db, ini, fin)
 	if err != nil {
 		return 0, false, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var fecha, descripcion string
-		var monto float64
-		if err := rows.Scan(&fecha, &monto, &descripcion); err != nil {
-			return 0, false, err
-		}
-		if shared.CoincidePatronSueldo(descripcion, a.patronesSueldo) {
-			return math.Abs(monto), true, nil
+	for _, m := range abonos {
+		if shared.CoincidePatronSueldo(m.Descripcion, a.patronesSueldo) {
+			return math.Abs(m.Monto), true, nil
 		}
 	}
-	return 0, false, rows.Err()
+	return 0, false, nil
 }
 
 // ObtenerGastosValidos lee TODOS los movimientos con monto < 0 (cargos),
@@ -97,66 +87,50 @@ func (a *Adapter) buscarSueldoEnRango(ini, fin time.Time) (float64, bool, error)
 // devuelve como Gasto. La política de corte usa el instrumento canónico
 // persistido. Suma también los gastos manuales del JSON.
 func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]presupuesto.Gasto, error) {
-	rows, err := a.db.Query(`SELECT id, fecha, monto, descripcion, instrumento, moneda, cuotas_totales
-		FROM movimientos WHERE monto < 0 ORDER BY fecha ASC, id ASC`)
+	cargos, err := Cargos(a.db)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	var gastos []presupuesto.Gasto
-	for rows.Next() {
-		var id int
-		var fechaISO, descripcion, instrumento, moneda string
-		var monto float64
-		var cuotasTotales int
-		if err := rows.Scan(&id, &fechaISO, &monto, &descripcion, &instrumento, &moneda, &cuotasTotales); err != nil {
-			return nil, err
-		}
-		fechaTransaccion, err := time.Parse("2006-01-02", fechaISO)
-		if err != nil {
-			continue
-		}
-
-		movimientoID := fmt.Sprintf("sql-%d", id)
+	for _, m := range cargos {
+		fechaISO := m.Fecha.Format("2006-01-02")
+		movimientoID := fmt.Sprintf("sql-%d", m.ID)
 
 		// Clasificar: override manual > regla por patrón > categoría default.
-		overrideCat := presupuesto.CategoriaOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
-		categoria := presupuesto.Clasificar(descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
+		overrideCat := presupuesto.CategoriaOverride(movimientoID, fechaISO, m.Monto, m.Descripcion, a.overrides)
+		categoria := presupuesto.Clasificar(m.Descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 		if categoria == presupuesto.Ignorado {
 			continue
 		}
 
-		cfg, err := a.resolvedor.ParaMes(fechaTransaccion)
+		cfg, err := a.resolvedor.ParaMes(m.Fecha)
 		if err != nil {
 			return nil, fmt.Errorf("resolviendo config %s: %w", fechaISO, err)
 		}
 
-		montoCrudo := presupuesto.AplicarOverrides(movimientoID, monto, fechaISO, descripcion, a.overrides)
-		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, movimientos.Moneda(moneda) == movimientos.MonedaUSD, cfg.TasaCambioUSD))
+		montoCrudo := presupuesto.AplicarOverrides(movimientoID, m.Monto, fechaISO, m.Descripcion, a.overrides)
+		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, m.Moneda == movimientos.MonedaUSD, cfg.TasaCambioUSD))
 
 		tipo := presupuesto.Debito
 		diaCorte := 0
-		if movimientos.Instrumento(instrumento) == movimientos.InstrumentoTarjetaCredito {
+		if m.Instrumento == movimientos.InstrumentoTarjetaCredito {
 			tipo = presupuesto.Credito
 			diaCorte = cfg.DiaDeCorteCredito
 		}
 
 		gastos = append(gastos, presupuesto.Gasto{
 			ID:               movimientoID,
-			Descripcion:      descripcion,
+			Descripcion:      m.Descripcion,
 			MontoImputado:    montoImputado,
-			Cuotas:           cuotasTotales,
-			FechaTransaccion: fechaTransaccion,
+			Cuotas:           m.CuotasTotales,
+			FechaTransaccion: m.Fecha,
 			PoliticaCorte: presupuesto.PoliticaCorte{
 				Tipo:       tipo,
 				DiaDeCorte: diaCorte,
 			},
 			CategoriaID: categoria,
 		})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 
 	manuales, err := a.manuales.Listar()
@@ -170,45 +144,35 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 // ObtenerMovimientos devuelve solo los movimientos con monto negativo
 // (cargos) aplicando overrides al campo MiParte.
 func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
-	rows, err := a.db.Query(`SELECT id, fecha, monto, descripcion, is_usd
-		FROM movimientos WHERE monto < 0 ORDER BY fecha DESC, id DESC`)
+	cargos, err := Cargos(a.db)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	var out []presupuesto.Movimiento
-	for rows.Next() {
-		var id int
-		var fechaISO, descripcion string
-		var monto float64
-		var isUSDInt int
-		if err := rows.Scan(&id, &fechaISO, &monto, &descripcion, &isUSDInt); err != nil {
-			return nil, err
-		}
-		fecha, err := time.Parse("2006-01-02", fechaISO)
-		if err != nil {
-			continue
-		}
+	for _, m := range cargos {
+		fechaISO := m.Fecha.Format("2006-01-02")
+		movimientoID := fmt.Sprintf("sql-%d", m.ID)
+		miParte := presupuesto.MiParteOverride(movimientoID, fechaISO, m.Monto, m.Descripcion, a.overrides)
 
-		movimientoID := fmt.Sprintf("sql-%d", id)
-		miParte := presupuesto.MiParteOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
-
-		overrideCat := presupuesto.CategoriaOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
-		categoria := presupuesto.Clasificar(descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
+		overrideCat := presupuesto.CategoriaOverride(movimientoID, fechaISO, m.Monto, m.Descripcion, a.overrides)
+		categoria := presupuesto.Clasificar(m.Descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 
 		out = append(out, presupuesto.Movimiento{
 			ID:          movimientoID,
-			Fecha:       fecha,
-			Descripcion: descripcion,
-			Monto:       monto,
-			IsUSD:       isUSDInt != 0,
+			Fecha:       m.Fecha,
+			Descripcion: m.Descripcion,
+			Monto:       m.Monto,
+			IsUSD:       m.IsUSD,
 			MiParte:     miParte,
 			CategoriaID: categoria,
 		})
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+
+	// Cargos() ordena fecha ASC, id ASC; ObtenerMovimientos necesita
+	// fecha DESC, id DESC — invertimos en Go en vez de duplicar la query.
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
 	}
 	return out, nil
 }
