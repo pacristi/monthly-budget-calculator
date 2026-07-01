@@ -8,8 +8,18 @@ import (
 	"time"
 	"unicode"
 
-	"presupuesto/internal/cartola/canonico"
+	parserObcl "presupuesto/banco/open-banking-chile/parser"
+	"presupuesto/movimientos"
 )
+
+// querier es el subconjunto de *sql.DB / *sql.Tx que el writer necesita.
+// Permite que los métodos de inserción/consulta corran indistintamente
+// contra la conexión suelta o contra una transacción.
+type querier interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
 
 // Writer inserta MovimientoBruto en sqlite aplicando dedup count-based
 // por la llave (banco, source, fecha, monto, descripcion).
@@ -29,50 +39,114 @@ func NewWriter(db *sql.DB, origen string) *Writer {
 }
 
 // GuardarMovimientos persiste movimientos canónicos en sqlite.
-func (w *Writer) GuardarMovimientos(batch []canonico.MovimientoBruto) (int, error) {
+func (w *Writer) GuardarMovimientos(batch []movimientos.MovimientoBruto) (int, error) {
 	return w.InsertarConDedup(batch)
 }
 
-// InsertarConDedup inserta los movimientos del batch evitando duplicaciones.
+// InsertarConDedup inserta los movimientos del batch evitando duplicaciones,
+// dentro de una única transacción:
 //
-// Trabaja en dos pasadas:
+//  1. DELETE FROM movimientos WHERE source LIKE '%unbilled%' — el snapshot
+//     provisorio anterior se descarta entero. Los unbilled driftean entre
+//     corridas y no tienen ID propio, así que la única forma consistente
+//     de mantenerlos al día es reemplazarlos completos en cada ingesta. El
+//     DELETE corre antes del dedup de liquidados para que el conteo no
+//     considere filas que ya van a desaparecer.
 //
-//  1. Compras en cuotas (CuotasTotales > 1): se agrupan por
+//  2. Los movimientos liquidados (no provisorios) del batch se insertan con
+//     el dedup de dos pasadas existente:
+//
+//     a. Compras en cuotas (CuotasTotales > 1): se agrupan por
 //     (banco, source, fecha, descripcion, N) — sin el monto, porque el
 //     banco a veces ajusta ±1 peso entre las últimas cuotas. De cada
 //     grupo se inserta UNA sola fila con el monto total de la compra; si
 //     ya hay alguna fila con esa llave en BD, se omite.
 //
-//  2. Movimientos simples (sin cuotas o CuotasTotales <= 1): dedup count-based por
-//     la llave clásica (banco, source, fecha, monto, descripcion). El
-//     batch puede tener M y la BD N; se inserta max(0, M-N). Cubre el
-//     caso "doble café".
+//     b. Movimientos simples (sin cuotas o CuotasTotales <= 1): dedup
+//     count-based por la llave clásica (banco, source, fecha, monto,
+//     descripcion). El batch puede tener M y la BD N; se inserta
+//     max(0, M-N). Cubre el caso "doble café".
 //
+//  3. Los movimientos provisorios (unbilled) del batch se insertan directo,
+//     sin dedup: tras el paso 1 la tabla no tiene provisorios, y la
+//     garantía de no-duplicados para ellos la da el scraper (billed xor
+//     unbilled por snapshot), no el writer.
+//
+// Si cualquier paso falla, se hace rollback completo.
 // Retorna la cantidad de filas efectivamente insertadas.
-func (w *Writer) InsertarConDedup(batch []canonico.MovimientoBruto) (int, error) {
+func (w *Writer) InsertarConDedup(batch []movimientos.MovimientoBruto) (int, error) {
 	fechaCarga := time.Now().UTC().Format(time.RFC3339)
 	total := 0
 
-	enCuotas, simples := separarPorTipoDeCuota(batch)
+	tx, err := w.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
 
-	n, err := w.insertarCompraEnCuotas(enCuotas, fechaCarga)
+	if _, err := tx.Exec(`DELETE FROM movimientos WHERE source LIKE '%unbilled%'`); err != nil {
+		return 0, fmt.Errorf("borrando unbilled previos: %w", err)
+	}
+
+	liquidados, provisorios := separarPorProvisorio(batch)
+
+	enCuotas, simples := separarPorTipoDeCuota(liquidados)
+
+	n, err := w.insertarCompraEnCuotas(tx, enCuotas, fechaCarga)
 	if err != nil {
 		return total, err
 	}
 	total += n
 
-	n, err = w.insertarSimples(simples, fechaCarga)
+	n, err = w.insertarSimples(tx, simples, fechaCarga)
 	if err != nil {
 		return total, err
 	}
 	total += n
 
+	n, err = w.insertarProvisorios(tx, provisorios, fechaCarga)
+	if err != nil {
+		return total, err
+	}
+	total += n
+
+	if err := tx.Commit(); err != nil {
+		return total, fmt.Errorf("commit tx: %w", err)
+	}
+
+	return total, nil
+}
+
+// separarPorProvisorio divide el batch en movimientos liquidados
+// (facturados) y provisorios (unbilled), según parserObcl.EsProvisorio.
+func separarPorProvisorio(batch []movimientos.MovimientoBruto) (liquidados, provisorios []movimientos.MovimientoBruto) {
+	for _, m := range batch {
+		if parserObcl.EsProvisorio(m.Source) {
+			provisorios = append(provisorios, m)
+		} else {
+			liquidados = append(liquidados, m)
+		}
+	}
+	return
+}
+
+// insertarProvisorios inserta los movimientos unbilled del batch sin pasar
+// por dedup: tras el DELETE previo la tabla no tiene provisorios, y la
+// garantía de no-duplicados la da el scraper, no el writer.
+func (w *Writer) insertarProvisorios(q querier, batch []movimientos.MovimientoBruto, fechaCarga string) (int, error) {
+	total := 0
+	for _, m := range batch {
+		if err := w.insertOne(q, m, fechaCarga); err != nil {
+			return total, fmt.Errorf("insert provisorio: %w", err)
+		}
+		total++
+	}
 	return total, nil
 }
 
 // separarPorTipoDeCuota divide el batch en dos: filas que pertenecen a
 // una compra en N>1 cuotas y filas simples.
-func separarPorTipoDeCuota(batch []canonico.MovimientoBruto) (enCuotas, simples []canonico.MovimientoBruto) {
+func separarPorTipoDeCuota(batch []movimientos.MovimientoBruto) (enCuotas, simples []movimientos.MovimientoBruto) {
 	for _, m := range batch {
 		if m.CuotasTotales > 1 {
 			enCuotas = append(enCuotas, m)
@@ -91,7 +165,7 @@ type cuotaCompraKey struct {
 // cuotaKeyOf agrupa por (banco, fecha, descripcion_normalizada, total_cuotas).
 // No incluye source (mismas razones que keyOf) ni monto (ajustes ±1 peso del
 // banco).
-func cuotaKeyOf(m canonico.MovimientoBruto) cuotaCompraKey {
+func cuotaKeyOf(m movimientos.MovimientoBruto) cuotaCompraKey {
 	return cuotaCompraKey{
 		banco:           m.Banco,
 		fecha:           m.Fecha.Format("2006-01-02"),
@@ -100,8 +174,8 @@ func cuotaKeyOf(m canonico.MovimientoBruto) cuotaCompraKey {
 	}
 }
 
-func (w *Writer) insertarCompraEnCuotas(batch []canonico.MovimientoBruto, fechaCarga string) (int, error) {
-	grupos := map[cuotaCompraKey][]canonico.MovimientoBruto{}
+func (w *Writer) insertarCompraEnCuotas(q querier, batch []movimientos.MovimientoBruto, fechaCarga string) (int, error) {
+	grupos := map[cuotaCompraKey][]movimientos.MovimientoBruto{}
 	for _, m := range batch {
 		k := cuotaKeyOf(m)
 		grupos[k] = append(grupos[k], m)
@@ -109,7 +183,7 @@ func (w *Writer) insertarCompraEnCuotas(batch []canonico.MovimientoBruto, fechaC
 
 	total := 0
 	for k, group := range grupos {
-		yaExiste, err := w.compraEnCuotasYaEnBD(k)
+		yaExiste, err := w.compraEnCuotasYaEnBD(q, k)
 		if err != nil {
 			return total, fmt.Errorf("chequeando compra en cuotas (%s,%s,%s,N=%d): %w",
 				k.banco, k.fecha, k.descripcionNorm, k.totalCuotas, err)
@@ -128,7 +202,7 @@ func (w *Writer) insertarCompraEnCuotas(batch []canonico.MovimientoBruto, fechaC
 			// facturada cargaremos la compra.
 			continue
 		}
-		if err := w.insertOne(representante, fechaCarga); err != nil {
+		if err := w.insertOne(q, representante, fechaCarga); err != nil {
 			return total, fmt.Errorf("insert compra en cuotas: %w", err)
 		}
 		total++
@@ -151,28 +225,28 @@ func (w *Writer) insertarCompraEnCuotas(batch []canonico.MovimientoBruto, fechaC
 //
 // Retorna (representante, true, nil) si pudo construirla, (zero, false, nil)
 // si el grupo no contiene cuotas que aporten monto (todas CuotaActual=0).
-func construirRepresentanteCompra(group []canonico.MovimientoBruto) (canonico.MovimientoBruto, bool, error) {
+func construirRepresentanteCompra(group []movimientos.MovimientoBruto) (movimientos.MovimientoBruto, bool, error) {
 	for _, m := range group {
 		if m.CuotaActual == 0 {
 			continue
 		}
-		if m.MontoRepresenta == canonico.MontoRepresentaTotal {
+		if m.MontoRepresenta == movimientos.MontoRepresentaTotal {
 			base := m
 			base.Cuotas = fmt.Sprintf("00/%02d", m.CuotasTotales)
 			return base, true, nil
 		}
 	}
 
-	var base canonico.MovimientoBruto
+	var base movimientos.MovimientoBruto
 	baseM := -1
 	var sumCuotas float64
 	cuotasFacturadas := 0
 	var totalCuotas int
 
 	for _, m := range group {
-		if m.MontoRepresenta != canonico.MontoRepresentaCuota {
+		if m.MontoRepresenta != movimientos.MontoRepresentaCuota {
 			if m.CuotaActual > 0 && m.MontoRepresenta == "" {
-				return canonico.MovimientoBruto{}, false, fmt.Errorf("movimiento en cuotas sin MontoRepresenta: fecha=%s descripcion=%q cuota=%d/%d",
+				return movimientos.MovimientoBruto{}, false, fmt.Errorf("movimiento en cuotas sin MontoRepresenta: fecha=%s descripcion=%q cuota=%d/%d",
 					m.Fecha.Format("2006-01-02"), m.Descripcion, m.CuotaActual, m.CuotasTotales)
 			}
 			continue
@@ -190,7 +264,7 @@ func construirRepresentanteCompra(group []canonico.MovimientoBruto) (canonico.Mo
 	}
 
 	if cuotasFacturadas == 0 {
-		return canonico.MovimientoBruto{}, false, nil
+		return movimientos.MovimientoBruto{}, false, nil
 	}
 
 	var montoTotal float64
@@ -208,11 +282,11 @@ func construirRepresentanteCompra(group []canonico.MovimientoBruto) (canonico.Mo
 	return base, true, nil
 }
 
-func (w *Writer) compraEnCuotasYaEnBD(k cuotaCompraKey) (bool, error) {
+func (w *Writer) compraEnCuotasYaEnBD(q querier, k cuotaCompraKey) (bool, error) {
 	// Llave (banco, fecha, descripcion_normalizada, N_total). Sin source
 	// (xlsx/scraper difieren) ni monto (±1 peso de ajuste). La comparación
 	// de descripción se hace en Go por la limitación unicode de sqlite UPPER.
-	rows, err := w.db.Query(`SELECT descripcion, cuotas FROM movimientos
+	rows, err := q.Query(`SELECT descripcion, cuotas FROM movimientos
 		WHERE banco = ? AND fecha = ?`,
 		k.banco, k.fecha,
 	)
@@ -259,12 +333,12 @@ func parseCuotasPersistidas(cuotas string) (m, n int, ok bool) {
 	return m, n, true
 }
 
-func (w *Writer) insertarSimples(batch []canonico.MovimientoBruto, fechaCarga string) (int, error) {
+func (w *Writer) insertarSimples(q querier, batch []movimientos.MovimientoBruto, fechaCarga string) (int, error) {
 	grouped := groupByDedupKey(batch)
 	total := 0
 	for _, group := range grouped {
 		first := group[0]
-		dbCount, err := w.countByKey(first)
+		dbCount, err := w.countByKey(q, first)
 		if err != nil {
 			return total, fmt.Errorf("count para llave (%s,%s,%v,%s): %w",
 				first.Banco, first.Fecha.Format("2006-01-02"), first.Monto, first.Descripcion, err)
@@ -274,7 +348,7 @@ func (w *Writer) insertarSimples(batch []canonico.MovimientoBruto, fechaCarga st
 			continue
 		}
 		for _, m := range group[:toInsert] {
-			if err := w.insertOne(m, fechaCarga); err != nil {
+			if err := w.insertOne(q, m, fechaCarga); err != nil {
 				return total, fmt.Errorf("insert: %w", err)
 			}
 			total++
@@ -294,7 +368,7 @@ type dedupKey struct {
 // xlsx usa "cta_corriente", scraper usa "account"). La descripción se
 // normaliza con TRIM+UPPER para tolerar variaciones de casing entre
 // fuentes (xlsx en mayúsculas, scraper en Title Case).
-func keyOf(m canonico.MovimientoBruto) dedupKey {
+func keyOf(m movimientos.MovimientoBruto) dedupKey {
 	return dedupKey{
 		banco:           m.Banco,
 		fecha:           m.Fecha.Format("2006-01-02"),
@@ -344,8 +418,8 @@ func DescripcionCanonicaExported(s string) string {
 	return descripcionCanonica(s)
 }
 
-func groupByDedupKey(batch []canonico.MovimientoBruto) map[dedupKey][]canonico.MovimientoBruto {
-	out := map[dedupKey][]canonico.MovimientoBruto{}
+func groupByDedupKey(batch []movimientos.MovimientoBruto) map[dedupKey][]movimientos.MovimientoBruto {
+	out := map[dedupKey][]movimientos.MovimientoBruto{}
 	for _, m := range batch {
 		k := keyOf(m)
 		out[k] = append(out[k], m)
@@ -353,12 +427,12 @@ func groupByDedupKey(batch []canonico.MovimientoBruto) map[dedupKey][]canonico.M
 	return out
 }
 
-func (w *Writer) countByKey(m canonico.MovimientoBruto) (int, error) {
+func (w *Writer) countByKey(q querier, m movimientos.MovimientoBruto) (int, error) {
 	// La comparación de descripción canónica se hace en Go: sqlite UPPER
 	// no normaliza caracteres unicode (UPPER("Café") devuelve "CAFé") y
 	// quedaríamos vulnerables a falsos negativos. Traemos las filas que
 	// coinciden en (banco, fecha, monto) y comparamos en memoria.
-	rows, err := w.db.Query(`SELECT descripcion FROM movimientos
+	rows, err := q.Query(`SELECT descripcion FROM movimientos
 		WHERE banco = ? AND fecha = ? AND monto = ?`,
 		m.Banco, m.Fecha.Format("2006-01-02"), m.Monto,
 	)
@@ -381,7 +455,7 @@ func (w *Writer) countByKey(m canonico.MovimientoBruto) (int, error) {
 	return count, rows.Err()
 }
 
-func (w *Writer) insertOne(m canonico.MovimientoBruto, fechaCarga string) error {
+func (w *Writer) insertOne(q querier, m movimientos.MovimientoBruto, fechaCarga string) error {
 	raw := m.Raw
 	if raw == nil {
 		raw = map[string]any{}
@@ -394,7 +468,7 @@ func (w *Writer) insertOne(m canonico.MovimientoBruto, fechaCarga string) error 
 	if m.IsUSD {
 		isUSD = 1
 	}
-	if m.Instrumento == canonico.InstrumentoDesconocido {
+	if m.Instrumento == movimientos.InstrumentoDesconocido {
 		return fmt.Errorf("movimiento sin Instrumento: fecha=%s descripcion=%q source=%q",
 			m.Fecha.Format("2006-01-02"), m.Descripcion, m.Source)
 	}
@@ -406,7 +480,7 @@ func (w *Writer) insertOne(m canonico.MovimientoBruto, fechaCarga string) error 
 		return fmt.Errorf("movimiento con CuotasTotales inválido: fecha=%s descripcion=%q source=%q cuotas_totales=%d",
 			m.Fecha.Format("2006-01-02"), m.Descripcion, m.Source, m.CuotasTotales)
 	}
-	_, err = w.db.Exec(`INSERT INTO movimientos
+	_, err = q.Exec(`INSERT INTO movimientos
 		(banco, source, fecha, monto, descripcion, is_usd, cuotas, raw, origen, fecha_carga, instrumento, moneda, cuotas_totales)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Banco, m.Source, m.Fecha.Format("2006-01-02"), m.Monto, m.Descripcion,

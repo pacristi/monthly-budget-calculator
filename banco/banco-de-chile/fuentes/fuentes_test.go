@@ -1,6 +1,8 @@
 package fuentes
 
 import (
+	"presupuesto/movimientos"
+	
 	"database/sql"
 	"encoding/json"
 	"os"
@@ -9,24 +11,32 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"presupuesto/internal/cartola/importacion"
-	sqlitepkg "presupuesto/internal/cartola/sqlite"
+	
+	sqlitepkg "presupuesto/storage/sqlite"
 )
 
-func TestOpenBankingChile_NoEntregaProvisorios(t *testing.T) {
+func TestOpenBankingChile_EntregaProvisoriosYLiquidados(t *testing.T) {
+	// Paso 1: la fuente deja de filtrar. LeerMovimientos entrega TODO
+	// (billed + unbilled); storage/sqlite.Writer decide cómo persistir
+	// cada uno.
 	jsonPath := writeTempJSON(t, jsonConProvisorio)
 
 	movs, err := NuevaOpenBankingChile(jsonPath).LeerMovimientos()
 	if err != nil {
 		t.Fatalf("LeerMovimientos: %v", err)
 	}
-	if len(movs) != 2 {
-		t.Fatalf("movimientos: esperaba 2, obtuve %d", len(movs))
+	if len(movs) != 3 {
+		t.Fatalf("movimientos: esperaba 3 (billed + unbilled sin filtrar), obtuve %d", len(movs))
 	}
+
+	var vioUnbilled bool
 	for _, m := range movs {
 		if m.Source == "credit_card_unbilled" {
-			t.Fatalf("no debió entregar provisorios: %+v", movs)
+			vioUnbilled = true
 		}
+	}
+	if !vioUnbilled {
+		t.Fatalf("esperaba que LeerMovimientos entregara el provisorio: %+v", movs)
 	}
 }
 
@@ -35,7 +45,7 @@ func TestOpenBankingChile_PrimeraCarga(t *testing.T) {
 	_, db := openTempDB(t)
 	repo := sqlitepkg.NewWriter(db, "obcl")
 
-	insertados, err := importacion.DesdeFuente(NuevaOpenBankingChile(jsonPath), repo)
+	insertados, err := DesdeFuente(NuevaOpenBankingChile(jsonPath), repo)
 	if err != nil {
 		t.Fatalf("DesdeFuente: %v", err)
 	}
@@ -77,10 +87,10 @@ func TestOpenBankingChile_EsIdempotente(t *testing.T) {
 	repo := sqlitepkg.NewWriter(db, "obcl")
 	fuente := NuevaOpenBankingChile(jsonPath)
 
-	if n, err := importacion.DesdeFuente(fuente, repo); err != nil || n != 3 {
+	if n, err := DesdeFuente(fuente, repo); err != nil || n != 3 {
 		t.Fatalf("primera corrida: n=%d err=%v", n, err)
 	}
-	if n, err := importacion.DesdeFuente(fuente, repo); err != nil || n != 0 {
+	if n, err := DesdeFuente(fuente, repo); err != nil || n != 0 {
 		t.Fatalf("segunda corrida: n=%d err=%v (esperaba 0)", n, err)
 	}
 
@@ -91,17 +101,19 @@ func TestOpenBankingChile_EsIdempotente(t *testing.T) {
 	}
 }
 
-func TestOpenBankingChile_NoPersisteProvisorio(t *testing.T) {
+func TestOpenBankingChile_PersisteProvisorio(t *testing.T) {
+	// Paso 1: el writer persiste unbilled (full-replace-on-each-ingest);
+	// la fuente ya no los filtra.
 	jsonPath := writeTempJSON(t, jsonConProvisorio)
 	_, db := openTempDB(t)
 	repo := sqlitepkg.NewWriter(db, "obcl")
 
-	insertados, err := importacion.DesdeFuente(NuevaOpenBankingChile(jsonPath), repo)
+	insertados, err := DesdeFuente(NuevaOpenBankingChile(jsonPath), repo)
 	if err != nil {
 		t.Fatalf("DesdeFuente: %v", err)
 	}
-	if insertados != 2 {
-		t.Errorf("esperaba 2 insertados (unbilled excluido), obtuve %d", insertados)
+	if insertados != 3 {
+		t.Errorf("esperaba 3 insertados (billed + unbilled), obtuve %d", insertados)
 	}
 
 	var unbilled int
@@ -110,8 +122,8 @@ func TestOpenBankingChile_NoPersisteProvisorio(t *testing.T) {
 	).Scan(&unbilled); err != nil {
 		t.Fatalf("count unbilled: %v", err)
 	}
-	if unbilled != 0 {
-		t.Errorf("esperaba 0 filas unbilled en BD, obtuve %d", unbilled)
+	if unbilled != 1 {
+		t.Errorf("esperaba 1 fila unbilled en BD, obtuve %d", unbilled)
 	}
 }
 

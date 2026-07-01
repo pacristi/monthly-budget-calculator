@@ -5,29 +5,20 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"presupuesto/internal/cartola/canonico"
-	"presupuesto/internal/cartola/canonico/bchile"
-	"presupuesto/internal/cartola/canonico/obcl"
+	"presupuesto/movimientos"
+	parserBchile "presupuesto/banco/banco-de-chile/parser"
+	parserObcl "presupuesto/banco/open-banking-chile/parser"
 )
 
 type OpenBankingChile struct {
 	JsonPath string
 }
 
-func (f OpenBankingChile) LeerMovimientos() ([]canonico.MovimientoBruto, error) {
-	brutos, err := obcl.LeerScraper(f.JsonPath)
-	if err != nil {
-		return nil, err
-	}
-
-	liquidado := brutos[:0]
-	for _, b := range brutos {
-		if obcl.EsProvisorio(b.Source) {
-			continue
-		}
-		liquidado = append(liquidado, b)
-	}
-	return liquidado, nil
+func (f OpenBankingChile) LeerMovimientos() ([]movimientos.MovimientoBruto, error) {
+	// Entrega TODO (billed + unbilled) sin filtrar: storage/sqlite.Writer
+	// decide cómo persistir cada uno (dedup para liquidados, replace
+	// completo para provisorios).
+	return parserObcl.LeerScraper(f.JsonPath)
 }
 
 type CartolaBancoChile struct {
@@ -37,7 +28,7 @@ type CartolaBancoChile struct {
 	Dir   string
 }
 
-func (f CartolaBancoChile) LeerMovimientos() ([]canonico.MovimientoBruto, error) {
+func (f CartolaBancoChile) LeerMovimientos() ([]movimientos.MovimientoBruto, error) {
 	parser, err := parserXLSX(f.Banco, f.Tipo)
 	if err != nil {
 		return nil, err
@@ -51,7 +42,7 @@ func (f CartolaBancoChile) LeerMovimientos() ([]canonico.MovimientoBruto, error)
 		return nil, fmt.Errorf("ningún .xls en %s", f.Dir)
 	}
 
-	var batch []canonico.MovimientoBruto
+	var batch []movimientos.MovimientoBruto
 	for _, a := range archivos {
 		movs, err := parser.Parsear(a, f.Anio)
 		if err != nil {
@@ -76,17 +67,17 @@ func NuevaCartolaXLSX(banco, tipo string, anio int, dir string) (CartolaBancoChi
 	return CartolaBancoChile{Banco: banco, Tipo: tipo, Anio: anio, Dir: dir}, nil
 }
 
-func parserXLSX(banco, tipo string) (bchile.ParserXLSX, error) {
+func parserXLSX(banco, tipo string) (parserBchile.ParserXLSX, error) {
 	if banco != "bchile" {
 		return nil, fmt.Errorf("banco no soportado: %s (solo 'bchile' por ahora)", banco)
 	}
 	switch tipo {
 	case "cta-corriente":
-		return bchile.NewCuentaCorriente(), nil
+		return parserBchile.NewCuentaCorriente(), nil
 	case "tc-nacional":
-		return bchile.NewTCNacional(), nil
+		return parserBchile.NewTCNacional(), nil
 	case "tc-internacional":
-		return bchile.NewTCInternacional(), nil
+		return parserBchile.NewTCInternacional(), nil
 	default:
 		return nil, fmt.Errorf("tipo no soportado en esta versión: %s (soporta cta-corriente, tc-nacional, tc-internacional)", tipo)
 	}
