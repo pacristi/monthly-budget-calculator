@@ -1,4 +1,4 @@
-package ajustes
+package json
 
 import "testing"
 

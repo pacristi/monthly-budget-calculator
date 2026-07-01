@@ -1,15 +1,15 @@
-// Package compuesto implementa un ProveedorFinanciero que compone dos
+// Package movimientos implementa un ProveedorFinanciero que compone dos
 // capas: la liquidada (hechos persistidos en sqlite) y la provisoria
 // (proyección viva del último scrape). Los conjuntos son disjuntos por
 // estado (un movimiento es billed xor unbilled en un snapshot), así que el
 // merge es una concatenación sin riesgo de doble conteo.
-package compuesto
+package movimientos
 
 import (
 	"fmt"
 
-	"presupuesto/internal/presentacion"
-	"presupuesto/internal/presupuesto"
+	"presupuesto/cmd/cli/presentacion"
+	"presupuesto/presupuesto"
 )
 
 // Adapter compone una capa liquidada y una provisoria.

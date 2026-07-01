@@ -1,8 +1,9 @@
 package presentacion
 
 import (
-	"presupuesto/internal/ajustes"
-	"presupuesto/internal/presupuesto"
+	repojson "presupuesto/storage/json"
+
+	"presupuesto/presupuesto"
 )
 
 type Presentador interface {
@@ -23,7 +24,7 @@ type Movimiento struct {
 
 // Movimientos aplica preferencias de presentación sin contaminar el dominio de
 // presupuesto ni obligar a cada handler a reconstruir la misma vista.
-func Movimientos(movs []presupuesto.Movimiento, overrides []ajustes.Override) []Movimiento {
+func Movimientos(movs []presupuesto.Movimiento, overrides []repojson.Override) []Movimiento {
 	vista := make([]Movimiento, 0, len(movs))
 	for _, m := range movs {
 		descripcion := descripcionMovimiento(m, overrides)
@@ -45,9 +46,9 @@ func Movimientos(movs []presupuesto.Movimiento, overrides []ajustes.Override) []
 	return vista
 }
 
-func descripcionMovimiento(m presupuesto.Movimiento, overrides []ajustes.Override) string {
+func descripcionMovimiento(m presupuesto.Movimiento, overrides []repojson.Override) string {
 	fechaISO := m.Fecha.Format("2006-01-02")
-	if desc := ajustes.DescripcionOverride(m.ID, fechaISO, m.Monto, m.Descripcion, overrides); desc != "" {
+	if desc := repojson.DescripcionOverride(m.ID, fechaISO, m.Monto, m.Descripcion, overrides); desc != "" {
 		return desc
 	}
 	return m.Descripcion

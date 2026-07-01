@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"presupuesto/internal/ajustes"
-	"presupuesto/internal/cartola/canonico"
-	"presupuesto/internal/cartola/shared"
-	"presupuesto/internal/presentacion"
-	"presupuesto/internal/presupuesto"
+	repojson "presupuesto/storage/json"
+	"presupuesto/movimientos"
+	"presupuesto/movimientos/shared"
+	"presupuesto/cmd/cli/presentacion"
+	"presupuesto/presupuesto"
 )
 
 // Adapter implementa presupuesto.ProveedorFinanciero leyendo movimientos
@@ -22,7 +22,7 @@ import (
 // de un JSON puntual.
 type Adapter struct {
 	db             *sql.DB
-	overrides      []ajustes.Override
+	overrides      []repojson.Override
 	reglas         []presupuesto.Regla
 	patronesSueldo []string
 	rutaManuales   string
@@ -30,8 +30,8 @@ type Adapter struct {
 }
 
 func NewAdapter(db *sql.DB, rutaDivisiones string, reglas []presupuesto.Regla, rutaSueldo, rutaManuales string, resolvedor presupuesto.ResolvedorConfig) *Adapter {
-	overrides, _ := ajustes.LeerOverrides(rutaDivisiones)
-	patronesSueldo, _ := ajustes.LeerListaStrings(rutaSueldo)
+	overrides, _ := repojson.LeerOverrides(rutaDivisiones)
+	patronesSueldo, _ := repojson.LeerListaStrings(rutaSueldo)
 	return &Adapter{
 		db:             db,
 		overrides:      overrides,
@@ -124,7 +124,7 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 		movimientoID := fmt.Sprintf("sql-%d", id)
 
 		// Clasificar: override manual > regla por patrón > categoría default.
-		overrideCat := ajustes.CategoriaOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
+		overrideCat := repojson.CategoriaOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
 		categoria := presupuesto.Clasificar(descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 		if categoria == presupuesto.Ignorado {
 			continue
@@ -135,12 +135,12 @@ func (a *Adapter) ObtenerGastosValidos(_ presupuesto.PeriodoPresupuestario) ([]p
 			return nil, fmt.Errorf("resolviendo config %s: %w", fechaISO, err)
 		}
 
-		montoCrudo := ajustes.AplicarOverrides(movimientoID, monto, fechaISO, descripcion, a.overrides)
-		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, canonico.Moneda(moneda) == canonico.MonedaUSD, cfg.TasaCambioUSD))
+		montoCrudo := repojson.AplicarOverrides(movimientoID, monto, fechaISO, descripcion, a.overrides)
+		montoImputado := math.Abs(shared.NormalizarMonto(montoCrudo, movimientos.Moneda(moneda) == movimientos.MonedaUSD, cfg.TasaCambioUSD))
 
 		tipo := presupuesto.Debito
 		diaCorte := 0
-		if canonico.Instrumento(instrumento) == canonico.InstrumentoTarjetaCredito {
+		if movimientos.Instrumento(instrumento) == movimientos.InstrumentoTarjetaCredito {
 			tipo = presupuesto.Credito
 			diaCorte = cfg.DiaDeCorteCredito
 		}
@@ -195,9 +195,9 @@ func (a *Adapter) ObtenerMovimientos() ([]presupuesto.Movimiento, error) {
 		}
 
 		movimientoID := fmt.Sprintf("sql-%d", id)
-		miParte := ajustes.MiParteOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
+		miParte := repojson.MiParteOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
 
-		overrideCat := ajustes.CategoriaOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
+		overrideCat := repojson.CategoriaOverride(movimientoID, fechaISO, monto, descripcion, a.overrides)
 		categoria := presupuesto.Clasificar(descripcion, overrideCat, a.reglas, presupuesto.CategoriaPorDefecto)
 
 		out = append(out, presupuesto.Movimiento{
