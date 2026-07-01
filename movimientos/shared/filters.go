@@ -1,30 +1,10 @@
 package shared
 
-import "strings"
+import "presupuesto/presupuesto"
 
-// EsGastoIgnorable devuelve true si la descripción contiene alguna de las
-// substrings de `exclusiones` (case-insensitive). Las exclusiones son
-// personales: típicamente ahorros, traspasos patrimoniales y pagos de
-// tarjeta que ya están contabilizados en otra parte.
-func EsGastoIgnorable(descripcion string, exclusiones []string) bool {
-	desc := strings.ToLower(descripcion)
-	for _, e := range exclusiones {
-		if strings.Contains(desc, strings.ToLower(e)) {
-			return true
-		}
-	}
-	return false
-}
-
-// CoincidePatronSueldo retorna true si descripcion (case-insensitive)
-// contiene alguno de los patrones. Igual semántica que EsGastoIgnorable
-// pero conceptualmente distinto (identificación vs filtrado).
+// CoincidePatronSueldo retorna true si descripcion (case-insensitive) contiene
+// alguno de los patrones. La regla canónica vive en presupuesto; esto es un
+// alias temporal para el adapter legacy obchile (se elimina con él en Paso 5).
 func CoincidePatronSueldo(descripcion string, patrones []string) bool {
-	desc := strings.ToLower(descripcion)
-	for _, p := range patrones {
-		if strings.Contains(desc, strings.ToLower(p)) {
-			return true
-		}
-	}
-	return false
+	return presupuesto.CoincidePatronSueldo(descripcion, patrones)
 }
