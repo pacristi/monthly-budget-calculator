@@ -83,3 +83,45 @@ func TestAplicarOverrides_FallbackLegacyPorFechaMontoYDescripcion(t *testing.T) 
 		}
 	})
 }
+
+func ptrB(b bool) *bool { return &b }
+
+func TestMonedaOverride_SinOverrideDevuelveNil(t *testing.T) {
+	overrides := []Override{
+		{Fecha: "2025-05-15", MontoOriginal: -3, Descripcion: "WINDSCRIBE", Categoria: "software"},
+	}
+	got := MonedaOverride("sql-1", "2025-05-15", -3, "WINDSCRIBE", overrides)
+	if got != nil {
+		t.Fatalf("esperaba nil (sin override de moneda), obtuve %v", *got)
+	}
+}
+
+func TestMonedaOverride_ConOverridePriorizaMovimientoID(t *testing.T) {
+	overrides := []Override{
+		{MovimientoID: "sql-1", Fecha: "2025-05-15", MontoOriginal: -3, Descripcion: "WINDSCRIBE", EsUSD: ptrB(true)},
+	}
+	got := MonedaOverride("sql-1", "2025-05-15", -3, "WINDSCRIBE", overrides)
+	if got == nil || *got != true {
+		t.Fatalf("esperaba override *true, obtuve %v", got)
+	}
+}
+
+func TestMonedaOverride_FallbackLegacyPorTerna(t *testing.T) {
+	overrides := []Override{
+		{Fecha: "2025-05-15", MontoOriginal: -3, Descripcion: "WINDSCRIBE", EsUSD: ptrB(true)},
+	}
+	got := MonedaOverride("sql-99", "2025-05-15", -3, "WINDSCRIBE", overrides)
+	if got == nil || *got != true {
+		t.Fatalf("esperaba fallback por terna *true, obtuve %v", got)
+	}
+}
+
+func TestMonedaOverride_PermiteForzarCLP(t *testing.T) {
+	overrides := []Override{
+		{MovimientoID: "sql-1", Fecha: "2025-05-15", MontoOriginal: -3, Descripcion: "WINDSCRIBE", EsUSD: ptrB(false)},
+	}
+	got := MonedaOverride("sql-1", "2025-05-15", -3, "WINDSCRIBE", overrides)
+	if got == nil || *got != false {
+		t.Fatalf("esperaba override *false (forzar CLP), obtuve %v", got)
+	}
+}

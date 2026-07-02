@@ -17,6 +17,10 @@ type Override struct {
 	MiParte       *float64 `json:"miParte,omitempty"`
 	Categoria     string   `json:"categoria,omitempty"`
 	Alias         string   `json:"alias,omitempty"`
+	// EsUSD corrige a mano la moneda detectada automáticamente
+	// (heurística por decimales, ver ingesta/open-banking-chile/facts.go).
+	// nil = sin corrección, usar la moneda persistida.
+	EsUSD *bool `json:"esUSD,omitempty"`
 }
 
 // AplicarOverrides devuelve el monto crudo a imputar: "mi parte" si hay un
@@ -46,6 +50,15 @@ func CategoriaOverride(movimientoID string, fechaISO string, montoOriginal float
 func MiParteOverride(movimientoID string, fechaISO string, montoOriginal float64, descripcion string, overrides []Override) *float64 {
 	if o, ok := buscarOverride(movimientoID, fechaISO, montoOriginal, descripcion, overrides); ok {
 		return o.MiParte
+	}
+	return nil
+}
+
+// MonedaOverride devuelve la corrección manual de moneda para un movimiento
+// persistido, o nil si no hay override (usar la moneda persistida tal cual).
+func MonedaOverride(movimientoID string, fechaISO string, montoOriginal float64, descripcion string, overrides []Override) *bool {
+	if o, ok := buscarOverride(movimientoID, fechaISO, montoOriginal, descripcion, overrides); ok {
+		return o.EsUSD
 	}
 	return nil
 }
