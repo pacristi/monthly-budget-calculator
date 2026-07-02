@@ -35,7 +35,11 @@ func EnriquecerGastos(cargos []movimientos.Persistido, overrides []Override, reg
 		}
 
 		montoCrudo := AplicarOverrides(movimientoID, m.Monto, fechaISO, m.Descripcion, overrides)
-		montoImputado := math.Abs(NormalizarMonto(montoCrudo, m.Moneda == movimientos.MonedaUSD, cfg.TasaCambioUSD))
+		esUSD := m.Moneda == movimientos.MonedaUSD
+		if override := MonedaOverride(movimientoID, fechaISO, m.Monto, m.Descripcion, overrides); override != nil {
+			esUSD = *override
+		}
+		montoImputado := math.Abs(NormalizarMonto(montoCrudo, esUSD, cfg.TasaCambioUSD))
 
 		tipo := Debito
 		diaCorte := 0
@@ -75,12 +79,17 @@ func VistaMovimientos(cargos []movimientos.Persistido, overrides []Override, reg
 		overrideCat := CategoriaOverride(movimientoID, fechaISO, m.Monto, m.Descripcion, overrides)
 		categoria := Clasificar(m.Descripcion, overrideCat, reglas, CategoriaPorDefecto)
 
+		esUSD := m.IsUSD
+		if override := MonedaOverride(movimientoID, fechaISO, m.Monto, m.Descripcion, overrides); override != nil {
+			esUSD = *override
+		}
+
 		out = append(out, Movimiento{
 			ID:          movimientoID,
 			Fecha:       m.Fecha,
 			Descripcion: m.Descripcion,
 			Monto:       m.Monto,
-			IsUSD:       m.IsUSD,
+			IsUSD:       esUSD,
 			MiParte:     miParte,
 			CategoriaID: categoria,
 		})

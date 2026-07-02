@@ -65,6 +65,8 @@ func gastoPorDesc(gastos []presupuesto.Gasto, desc string) (presupuesto.Gasto, b
 
 func ptr(f float64) *float64 { return &f }
 
+func ptrB(b bool) *bool { return &b }
+
 func TestEnriquecerGastos(t *testing.T) {
 	res := resolvedorFake{tasaUSD: 950, diaCorteCC: 22}
 
@@ -197,6 +199,25 @@ func TestEnriquecerGastos(t *testing.T) {
 		}
 	})
 
+	t.Run("override de moneda fuerza USD aunque el monto sea entero", func(t *testing.T) {
+		cargos := []movimientos.Persistido{
+			cargo(1, "2026-05-10", -3, "WINDSCRIBE", movimientos.InstrumentoTarjetaCredito, movimientos.MonedaCLP, 1),
+		}
+		overrides := []presupuesto.Override{
+			{MovimientoID: "sql-1", Fecha: "2026-05-10", MontoOriginal: -3, Descripcion: "WINDSCRIBE", EsUSD: ptrB(true)},
+		}
+		gastos, err := presupuesto.EnriquecerGastos(cargos, overrides, nil, res)
+		if err != nil {
+			t.Fatalf("EnriquecerGastos: %v", err)
+		}
+		if len(gastos) != 1 {
+			t.Fatalf("esperaba 1 gasto, obtuve %d", len(gastos))
+		}
+		if want := 3.0 * 950; gastos[0].MontoImputado != want {
+			t.Errorf("MontoImputado = %v, want %v (override debe forzar conversión USD)", gastos[0].MontoImputado, want)
+		}
+	})
+
 	t.Run("override de categoria gana sobre la regla sin tocar el monto", func(t *testing.T) {
 		cargos := []movimientos.Persistido{
 			cargo(1, "2026-05-12", -200000, "Traspaso Fintual", movimientos.InstrumentoCuentaCorriente, movimientos.MonedaCLP, 1),
@@ -322,6 +343,23 @@ func TestVistaMovimientos(t *testing.T) {
 		}
 		if movs[0].ID != "sql-1" {
 			t.Errorf("ID: esperaba sql-1, obtuve %q", movs[0].ID)
+		}
+	})
+
+	t.Run("override de moneda fuerza IsUSD aunque el monto sea entero", func(t *testing.T) {
+		cargos := []movimientos.Persistido{
+			cargo(1, "2026-05-10", -3, "WINDSCRIBE", movimientos.InstrumentoTarjetaCredito, movimientos.MonedaCLP, 1),
+		}
+		overrides := []presupuesto.Override{
+			{MovimientoID: "sql-1", Fecha: "2026-05-10", MontoOriginal: -3, Descripcion: "WINDSCRIBE", EsUSD: ptrB(true)},
+		}
+
+		movs := presupuesto.VistaMovimientos(cargos, overrides, nil)
+		if len(movs) != 1 {
+			t.Fatalf("esperaba 1, obtuve %d", len(movs))
+		}
+		if !movs[0].IsUSD {
+			t.Errorf("IsUSD = %v, want true (override debe forzar USD)", movs[0].IsUSD)
 		}
 	})
 
