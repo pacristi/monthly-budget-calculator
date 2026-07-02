@@ -28,8 +28,10 @@ async function run() {
   const dataStr = JSON.stringify(result, null, 2);
 
   // 1. Guardar en el Data Lake (Histórico) en /data/archive/
+  // (currentDir es .../ingesta/open-banking-chile/scraper — 3 niveles bajo
+  // la raíz del repo).
   const fecha = new Date().toISOString().split('T')[0];
-  const archiveDir = path.join(currentDir, '../data/archive');
+  const archiveDir = path.join(currentDir, '../../../data/archive');
   const archivePath = path.join(archiveDir, `obcl_${fecha}.json`);
   
   if (!fs.existsSync(archiveDir)) {
@@ -41,7 +43,7 @@ async function run() {
 
   // 2. Sobrescribir el estado actual en /data/current.json, o en la ruta
   // configurada por el proceso Go para que refresh lea el mismo archivo.
-  const currentPath = process.env.SCRAPER_OUTPUT_PATH || path.join(currentDir, '../data/current.json');
+  const currentPath = process.env.SCRAPER_OUTPUT_PATH || path.join(currentDir, '../../../data/current.json');
   fs.writeFileSync(currentPath, dataStr);
   console.log(`✅ Estado actual sobrescrito en: ${currentPath}`);
 }
