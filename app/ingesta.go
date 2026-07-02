@@ -12,7 +12,7 @@ import (
 // banco.Scraper — la orquestación vive acá directo).
 func (a *App) Refrescar(persistir bool) (int, error) {
 	scraper := obcl.EjecutarScraper{
-		Dir:        "ingest",
+		Dir:        "ingesta/open-banking-chile",
 		Script:     "scraper.js",
 		OutputPath: a.provisorioPath,
 	}
