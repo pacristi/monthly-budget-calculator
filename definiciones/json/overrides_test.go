@@ -7,29 +7,24 @@ import (
 )
 
 func ptrF(f float64) *float64 { return &f }
+func ptrB(b bool) *bool       { return &b }
 
 func TestGuardarMiPartePreservaCategoria(t *testing.T) {
-	ruta := t.TempDir() + "/overrides.json"
+	repo := NewRepoOverrides(t.TempDir() + "/overrides.json")
 
-	if err := GuardarCategoria(ruta, presupuesto.Override{
-		Fecha:         "2025-05-15",
-		MontoOriginal: -3500,
-		Descripcion:   "Starbucks café AM",
-		Categoria:     "cafes",
+	if err := repo.GuardarCategoria(presupuesto.Override{
+		Fecha: "2025-05-15", MontoOriginal: -3500, Descripcion: "Starbucks café AM", Categoria: "cafes",
 	}); err != nil {
 		t.Fatalf("guardando categoría: %v", err)
 	}
 
-	if err := GuardarMiParte(ruta, presupuesto.Override{
-		Fecha:         "2025-05-15",
-		MontoOriginal: -3500,
-		Descripcion:   "Starbucks café AM",
-		MiParte:       ptrF(-1750),
+	if err := repo.GuardarMiParte(presupuesto.Override{
+		Fecha: "2025-05-15", MontoOriginal: -3500, Descripcion: "Starbucks café AM", MiParte: ptrF(-1750),
 	}); err != nil {
 		t.Fatalf("guardando mi parte: %v", err)
 	}
 
-	overrides, err := LeerOverrides(ruta)
+	overrides, err := repo.Leer()
 	if err != nil {
 		t.Fatalf("leyendo overrides: %v", err)
 	}
@@ -45,10 +40,10 @@ func TestGuardarMiPartePreservaCategoria(t *testing.T) {
 }
 
 func TestGuardarAliasPreservaAjustesContables(t *testing.T) {
-	ruta := t.TempDir() + "/overrides.json"
+	repo := NewRepoOverrides(t.TempDir() + "/overrides.json")
 	miParte := -1750.0
 
-	if err := GuardarMiParte(ruta, presupuesto.Override{
+	if err := repo.GuardarMiParte(presupuesto.Override{
 		MovimientoID:  "sql-42",
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
@@ -59,7 +54,7 @@ func TestGuardarAliasPreservaAjustesContables(t *testing.T) {
 		t.Fatalf("guardando mi parte: %v", err)
 	}
 
-	if err := GuardarAlias(ruta, presupuesto.Override{
+	if err := repo.GuardarAlias(presupuesto.Override{
 		MovimientoID:  "sql-42",
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
@@ -69,7 +64,7 @@ func TestGuardarAliasPreservaAjustesContables(t *testing.T) {
 		t.Fatalf("guardando alias: %v", err)
 	}
 
-	overrides, err := LeerOverrides(ruta)
+	overrides, err := repo.Leer()
 	if err != nil {
 		t.Fatalf("leyendo overrides: %v", err)
 	}
@@ -91,9 +86,9 @@ func TestGuardarAliasPreservaAjustesContables(t *testing.T) {
 }
 
 func TestGuardarMiParteMatcheaPorMovimientoIDAunqueCambieDescripcion(t *testing.T) {
-	ruta := t.TempDir() + "/overrides.json"
+	repo := NewRepoOverrides(t.TempDir() + "/overrides.json")
 
-	if err := GuardarCategoria(ruta, presupuesto.Override{
+	if err := repo.GuardarCategoria(presupuesto.Override{
 		MovimientoID:  "sql-42",
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
@@ -103,7 +98,7 @@ func TestGuardarMiParteMatcheaPorMovimientoIDAunqueCambieDescripcion(t *testing.
 		t.Fatalf("guardando categoría: %v", err)
 	}
 
-	if err := GuardarMiParte(ruta, presupuesto.Override{
+	if err := repo.GuardarMiParte(presupuesto.Override{
 		MovimientoID:  "sql-42",
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
@@ -113,7 +108,7 @@ func TestGuardarMiParteMatcheaPorMovimientoIDAunqueCambieDescripcion(t *testing.
 		t.Fatalf("guardando mi parte: %v", err)
 	}
 
-	overrides, err := LeerOverrides(ruta)
+	overrides, err := repo.Leer()
 	if err != nil {
 		t.Fatalf("leyendo overrides: %v", err)
 	}
@@ -132,9 +127,9 @@ func TestGuardarMiParteMatcheaPorMovimientoIDAunqueCambieDescripcion(t *testing.
 }
 
 func TestGuardarMiParteActualizaMovimientoIDViejoPorTerna(t *testing.T) {
-	ruta := t.TempDir() + "/overrides.json"
+	repo := NewRepoOverrides(t.TempDir() + "/overrides.json")
 
-	if err := GuardarCategoria(ruta, presupuesto.Override{
+	if err := repo.GuardarCategoria(presupuesto.Override{
 		MovimientoID:  "sql-1",
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
@@ -144,7 +139,7 @@ func TestGuardarMiParteActualizaMovimientoIDViejoPorTerna(t *testing.T) {
 		t.Fatalf("guardando categoría: %v", err)
 	}
 
-	if err := GuardarMiParte(ruta, presupuesto.Override{
+	if err := repo.GuardarMiParte(presupuesto.Override{
 		MovimientoID:  "sql-50",
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
@@ -154,7 +149,7 @@ func TestGuardarMiParteActualizaMovimientoIDViejoPorTerna(t *testing.T) {
 		t.Fatalf("guardando mi parte: %v", err)
 	}
 
-	overrides, err := LeerOverrides(ruta)
+	overrides, err := repo.Leer()
 	if err != nil {
 		t.Fatalf("leyendo overrides: %v", err)
 	}
@@ -173,9 +168,9 @@ func TestGuardarMiParteActualizaMovimientoIDViejoPorTerna(t *testing.T) {
 }
 
 func TestGuardarCategoriaPermiteLimpiarCategoria(t *testing.T) {
-	ruta := t.TempDir() + "/overrides.json"
+	repo := NewRepoOverrides(t.TempDir() + "/overrides.json")
 
-	if err := GuardarMiParte(ruta, presupuesto.Override{
+	if err := repo.GuardarMiParte(presupuesto.Override{
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
 		Descripcion:   "Starbucks café AM",
@@ -184,7 +179,7 @@ func TestGuardarCategoriaPermiteLimpiarCategoria(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("guardando mi parte: %v", err)
 	}
-	if err := GuardarCategoria(ruta, presupuesto.Override{
+	if err := repo.GuardarCategoria(presupuesto.Override{
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
 		Descripcion:   "Starbucks café AM",
@@ -193,7 +188,7 @@ func TestGuardarCategoriaPermiteLimpiarCategoria(t *testing.T) {
 		t.Fatalf("guardando categoría: %v", err)
 	}
 
-	if err := GuardarCategoria(ruta, presupuesto.Override{
+	if err := repo.GuardarCategoria(presupuesto.Override{
 		Fecha:         "2025-05-15",
 		MontoOriginal: -3500,
 		Descripcion:   "Starbucks café AM",
@@ -202,7 +197,7 @@ func TestGuardarCategoriaPermiteLimpiarCategoria(t *testing.T) {
 		t.Fatalf("limpiando categoría: %v", err)
 	}
 
-	overrides, err := LeerOverrides(ruta)
+	overrides, err := repo.Leer()
 	if err != nil {
 		t.Fatalf("leyendo overrides: %v", err)
 	}
@@ -214,5 +209,57 @@ func TestGuardarCategoriaPermiteLimpiarCategoria(t *testing.T) {
 	}
 	if overrides[0].MiParte == nil || *overrides[0].MiParte != -1750 {
 		t.Fatalf("GuardarCategoria debe preservar MiParte, obtuvo %+v", overrides[0].MiParte)
+	}
+}
+
+func TestGuardarMonedaComoUnicoCambioSeGuarda(t *testing.T) {
+	repo := NewRepoOverrides(t.TempDir() + "/overrides.json")
+	esUSD := true
+
+	if err := repo.GuardarMoneda(presupuesto.Override{
+		MovimientoID: "sql-1", Fecha: "2026-06-30", MontoOriginal: -3, Descripcion: "WINDSCRIBE", EsUSD: &esUSD,
+	}); err != nil {
+		t.Fatalf("guardando moneda: %v", err)
+	}
+
+	overrides, err := repo.Leer()
+	if err != nil {
+		t.Fatalf("leyendo overrides: %v", err)
+	}
+	if len(overrides) != 1 {
+		t.Fatalf("un override que solo trae EsUSD no debe descartarse como vacío; esperaba 1, obtuve %d", len(overrides))
+	}
+	if overrides[0].EsUSD == nil || *overrides[0].EsUSD != true {
+		t.Fatalf("EsUSD no guardado correctamente: %+v", overrides[0].EsUSD)
+	}
+}
+
+func TestGuardarMonedaPreservaAjustesExistentes(t *testing.T) {
+	repo := NewRepoOverrides(t.TempDir() + "/overrides.json")
+	esUSD := true
+
+	if err := repo.GuardarCategoria(presupuesto.Override{
+		Fecha: "2026-06-30", MontoOriginal: -3, Descripcion: "WINDSCRIBE", Categoria: "software",
+	}); err != nil {
+		t.Fatalf("guardando categoría: %v", err)
+	}
+	if err := repo.GuardarMoneda(presupuesto.Override{
+		Fecha: "2026-06-30", MontoOriginal: -3, Descripcion: "WINDSCRIBE", EsUSD: &esUSD,
+	}); err != nil {
+		t.Fatalf("guardando moneda: %v", err)
+	}
+
+	overrides, err := repo.Leer()
+	if err != nil {
+		t.Fatalf("leyendo overrides: %v", err)
+	}
+	if len(overrides) != 1 {
+		t.Fatalf("esperaba actualizar el registro existente, obtuve %d", len(overrides))
+	}
+	if overrides[0].Categoria != "software" {
+		t.Fatalf("GuardarMoneda debe preservar categoría, obtuvo %q", overrides[0].Categoria)
+	}
+	if overrides[0].EsUSD == nil || *overrides[0].EsUSD != true {
+		t.Fatalf("EsUSD no guardado correctamente: %+v", overrides[0].EsUSD)
 	}
 }

@@ -3,16 +3,36 @@ package defjson
 import (
 	"encoding/json"
 	"os"
+	"sync"
 
 	"presupuesto/presupuesto"
 )
 
-// LeerOverrides lee el archivo de ajustes locales, si existe.
-func LeerOverrides(ruta string) ([]presupuesto.Override, error) {
-	if ruta == "" {
+// RepoOverrides persiste los ajustes manuales del usuario (mi parte,
+// categoría, alias, moneda) sobre movimientos. Thread-safe vía mutex, con
+// escritura atómica (temp + rename, vía escribirArchivoAtomico).
+type RepoOverrides struct {
+	ruta string
+	mu   sync.Mutex
+}
+
+func NewRepoOverrides(ruta string) *RepoOverrides {
+	return &RepoOverrides{ruta: ruta}
+}
+
+// Leer devuelve los overrides declarados, o una lista vacía si el archivo
+// no existe o está vacío.
+func (r *RepoOverrides) Leer() ([]presupuesto.Override, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.leerSinLock()
+}
+
+func (r *RepoOverrides) leerSinLock() ([]presupuesto.Override, error) {
+	if r.ruta == "" {
 		return []presupuesto.Override{}, nil
 	}
-	data, err := os.ReadFile(ruta)
+	data, err := os.ReadFile(r.ruta)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []presupuesto.Override{}, nil
@@ -27,31 +47,42 @@ func LeerOverrides(ruta string) ([]presupuesto.Override, error) {
 }
 
 // GuardarMiParte inserta o actualiza el ajuste de split de un movimiento,
-// preservando su categoría manual si ya existía.
-func GuardarMiParte(ruta string, override presupuesto.Override) error {
-	return guardarOverride(ruta, override, func(actual *presupuesto.Override, nuevo presupuesto.Override) {
+// preservando sus otros ajustes si ya existían.
+func (r *RepoOverrides) GuardarMiParte(o presupuesto.Override) error {
+	return r.guardar(o, func(actual *presupuesto.Override, nuevo presupuesto.Override) {
 		actual.MiParte = nuevo.MiParte
 	})
 }
 
-// GuardarCategoria inserta o actualiza la categoría manual de un movimiento,
-// preservando su split si ya existía. Categoria="" limpia la categoría manual.
-func GuardarCategoria(ruta string, override presupuesto.Override) error {
-	return guardarOverride(ruta, override, func(actual *presupuesto.Override, nuevo presupuesto.Override) {
+// GuardarCategoria inserta o actualiza la categoría manual de un movimiento.
+// Categoria="" limpia la categoría manual.
+func (r *RepoOverrides) GuardarCategoria(o presupuesto.Override) error {
+	return r.guardar(o, func(actual *presupuesto.Override, nuevo presupuesto.Override) {
 		actual.Categoria = nuevo.Categoria
 	})
 }
 
-// GuardarAlias inserta o actualiza la descripción visible del movimiento,
-// preservando sus ajustes contables. Alias="" limpia el alias.
-func GuardarAlias(ruta string, override presupuesto.Override) error {
-	return guardarOverride(ruta, override, func(actual *presupuesto.Override, nuevo presupuesto.Override) {
+// GuardarAlias inserta o actualiza la descripción visible del movimiento.
+// Alias="" limpia el alias.
+func (r *RepoOverrides) GuardarAlias(o presupuesto.Override) error {
+	return r.guardar(o, func(actual *presupuesto.Override, nuevo presupuesto.Override) {
 		actual.Alias = nuevo.Alias
 	})
 }
 
-func guardarOverride(ruta string, override presupuesto.Override, aplicar func(*presupuesto.Override, presupuesto.Override)) error {
-	overrides, err := LeerOverrides(ruta)
+// GuardarMoneda inserta o actualiza la corrección manual de moneda
+// (USD/CLP) de un movimiento.
+func (r *RepoOverrides) GuardarMoneda(o presupuesto.Override) error {
+	return r.guardar(o, func(actual *presupuesto.Override, nuevo presupuesto.Override) {
+		actual.EsUSD = nuevo.EsUSD
+	})
+}
+
+func (r *RepoOverrides) guardar(override presupuesto.Override, aplicar func(*presupuesto.Override, presupuesto.Override)) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	overrides, err := r.leerSinLock()
 	if err != nil {
 		overrides = []presupuesto.Override{}
 	}
@@ -69,13 +100,13 @@ func guardarOverride(ruta string, override presupuesto.Override, aplicar func(*p
 	}
 	if !found {
 		aplicar(&override, override)
-		if override.MiParte == nil && override.Categoria == "" && override.Alias == "" {
-			return escribirOverrides(ruta, overrides)
+		if override.MiParte == nil && override.Categoria == "" && override.Alias == "" && override.EsUSD == nil {
+			return escribirOverrides(r.ruta, overrides)
 		}
 		overrides = append(overrides, override)
 	}
 
-	return escribirOverrides(ruta, overrides)
+	return escribirOverrides(r.ruta, overrides)
 }
 
 func escribirOverrides(ruta string, overrides []presupuesto.Override) error {
