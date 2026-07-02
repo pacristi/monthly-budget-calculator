@@ -244,6 +244,9 @@ const loadMovements = async () => {
                         <button class="btn btn-secondary btn-sm" onclick="ignorarGasto(${jsString(m.fecha)}, ${jsString(descripcionOriginal)}, ${jsValue(m.monto)})" title="Marca este gasto como no contable (mi parte = 0)">
                             No contar
                         </button>
+                        <button class="btn btn-ghost btn-sm" onclick="toggleMoneda(${jsString(m.id)}, ${jsString(m.fecha)}, ${jsString(descripcionOriginal)}, ${jsValue(m.monto)}, ${jsValue(m.isUsd || false)})" title="Corregir si este movimiento es USD o CLP">
+                            ${m.isUsd ? 'Es USD' : 'Es CLP'}
+                        </button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -318,6 +321,32 @@ window.ignorarGasto = async (fecha, descripcion, monto) => {
     } catch (e) {
         console.error('Error ignorando gasto:', e);
         alert('Error al marcar como no contable');
+    }
+};
+
+// toggleMoneda crea/actualiza un override para corregir a mano si un
+// movimiento es USD o CLP (la heurística automática falla en cargos USD
+// sin decimales, p.ej. WINDSCRIBE).
+window.toggleMoneda = async (movimientoId, fecha, descripcion, monto, esUSDActual) => {
+    try {
+        const res = await fetch('/api/movimientos/moneda', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                movimientoId,
+                fecha,
+                montoOriginal: monto,
+                descripcion,
+                esUSD: !esUSDActual,
+            }),
+        });
+        if (!res.ok) {
+            throw new Error(await res.text());
+        }
+        loadMovements();
+    } catch (e) {
+        console.error('Error corrigiendo moneda:', e);
+        alert('No se pudo corregir la moneda: ' + e.message);
     }
 };
 
