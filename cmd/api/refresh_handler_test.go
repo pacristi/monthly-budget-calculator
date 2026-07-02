@@ -1,22 +1,23 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"presupuesto/internal/app/bootstrap"
 )
 
+// refreshFake stubea la superficie refrescador para testear el handler aislado
+// de la ejecución real del scraper.
 type refreshFake struct {
-	persistirRecibido bool
 	llamado           bool
+	persistirRecibido bool
 	nuevos            int
 	err               error
 }
 
-func (f *refreshFake) Ejecutar(persistir bool) (int, error) {
+func (f *refreshFake) Refrescar(persistir bool) (int, error) {
 	f.llamado = true
 	f.persistirRecibido = persistir
 	return f.nuevos, f.err
@@ -24,7 +25,7 @@ func (f *refreshFake) Ejecutar(persistir bool) (int, error) {
 
 func TestRefresh_RechazaNoPost(t *testing.T) {
 	refresh := &refreshFake{}
-	deps := apiDeps{app: &bootstrap.App{Proveedor: "obchile"}, refresh: refresh}
+	deps := apiDeps{refresh: refresh}
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/refresh", nil)
@@ -38,9 +39,9 @@ func TestRefresh_RechazaNoPost(t *testing.T) {
 	}
 }
 
-func TestRefresh_ModoSimpleSoloScrapea(t *testing.T) {
-	refresh := &refreshFake{}
-	deps := apiDeps{app: &bootstrap.App{Proveedor: "obchile"}, refresh: refresh}
+func TestRefresh_PostExitosoPersisteYDevuelveShape(t *testing.T) {
+	refresh := &refreshFake{nuevos: 3}
+	deps := apiDeps{refresh: refresh}
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)
@@ -52,45 +53,25 @@ func TestRefresh_ModoSimpleSoloScrapea(t *testing.T) {
 	if !refresh.llamado {
 		t.Error("debió correr el refresh")
 	}
-	if refresh.persistirRecibido {
-		t.Error("modo simple NO debe persistir")
+	if !refresh.persistirRecibido {
+		t.Error("con un solo modo (sqlite), refrescar SIEMPRE persiste")
+	}
+
+	var body struct {
+		Status string `json:"status"`
+		Modo   string `json:"modo"`
+		Nuevos int    `json:"nuevos"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Status != "ok" || body.Modo != "sqlite" || body.Nuevos != 3 {
+		t.Errorf("shape inesperado: %+v", body)
 	}
 }
 
-func TestRefresh_ModoSqliteScrapeaYVuelca(t *testing.T) {
-	refresh := &refreshFake{nuevos: 3}
-	deps := apiDeps{app: &bootstrap.App{Proveedor: "sqlite"}, refresh: refresh}
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)
-	deps.handleRefresh(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status: %d (%s)", rec.Code, rec.Body.String())
-	}
-	if !refresh.llamado || !refresh.persistirRecibido {
-		t.Errorf("modo sqlite debe refrescar (%v) y persistir (%v)", refresh.llamado, refresh.persistirRecibido)
-	}
-}
-
-func TestRefresh_ModoCompuestoScrapeaYVuelca(t *testing.T) {
-	refresh := &refreshFake{nuevos: 3}
-	deps := apiDeps{app: &bootstrap.App{Proveedor: "compuesto"}, refresh: refresh}
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)
-	deps.handleRefresh(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status: %d (%s)", rec.Code, rec.Body.String())
-	}
-	if !refresh.llamado || !refresh.persistirRecibido {
-		t.Errorf("modo compuesto debe refrescar (%v) y persistir (%v)", refresh.llamado, refresh.persistirRecibido)
-	}
-}
-
-func TestRefresh_ErrorDeScraperEs500(t *testing.T) {
-	deps := apiDeps{app: &bootstrap.App{Proveedor: "obchile"}, refresh: &refreshFake{err: errors.New("boom")}}
+func TestRefresh_ErrorDeRefrescarEs500(t *testing.T) {
+	deps := apiDeps{refresh: &refreshFake{err: errors.New("boom")}}
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/refresh", nil)

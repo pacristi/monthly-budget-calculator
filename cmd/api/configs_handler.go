@@ -4,24 +4,36 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
-	"presupuesto/internal/config"
+	defjson "presupuesto/definiciones/json"
+	"presupuesto/presupuesto"
 )
 
+// configStore es la superficie de app/ que necesitan los handlers de configs.
+// La satisface *app.App directamente; en tests se usa un fake sobre un
+// *defjson.RepoJSON temporal.
+type configStore interface {
+	Configs() ([]defjson.ConfigMensual, error)
+	ConfigResuelta(mes time.Time) (presupuesto.ConfigPresupuesto, error)
+	GuardarConfig(c defjson.ConfigMensual) error
+	BorrarConfig(mesDesde string) error
+}
+
 // handlerListar sirve GET /api/configs.
-func handlerListar(repo *config.RepoJSON) http.HandlerFunc {
+func handlerListar(store configStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		configs, err := repo.Listar()
+		configs, err := store.Configs()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if configs == nil {
-			configs = []config.ConfigMensual{}
+			configs = []defjson.ConfigMensual{}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(configs)
@@ -31,7 +43,7 @@ func handlerListar(repo *config.RepoJSON) http.HandlerFunc {
 // handlerSubconfigs maneja /api/configs/{algo}:
 //   - "resuelta"   → GET ?mes=YYYY-MM
 //   - "{YYYY-MM}"  → PUT | DELETE
-func handlerSubconfigs(repo *config.RepoJSON) http.HandlerFunc {
+func handlerSubconfigs(store configStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resto := strings.TrimPrefix(r.URL.Path, "/api/configs/")
 		resto = strings.Trim(resto, "/")
@@ -40,14 +52,14 @@ func handlerSubconfigs(repo *config.RepoJSON) http.HandlerFunc {
 			return
 		}
 		if resto == "resuelta" {
-			handleResuelta(w, r, repo)
+			handleResuelta(w, r, store)
 			return
 		}
-		handleItem(w, r, repo, resto)
+		handleItem(w, r, store, resto)
 	}
 }
 
-func handleResuelta(w http.ResponseWriter, r *http.Request, repo *config.RepoJSON) {
+func handleResuelta(w http.ResponseWriter, r *http.Request, store configStore) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -57,12 +69,12 @@ func handleResuelta(w http.ResponseWriter, r *http.Request, repo *config.RepoJSO
 		http.Error(w, "missing ?mes=YYYY-MM", http.StatusBadRequest)
 		return
 	}
-	mes, err := config.ParseMes(mesStr)
+	mes, err := defjson.ParseMes(mesStr)
 	if err != nil {
 		http.Error(w, "mes inválido, esperado YYYY-MM", http.StatusBadRequest)
 		return
 	}
-	resuelta, err := repo.ParaMes(mes)
+	resuelta, err := store.ConfigResuelta(mes)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -71,8 +83,8 @@ func handleResuelta(w http.ResponseWriter, r *http.Request, repo *config.RepoJSO
 	json.NewEncoder(w).Encode(resuelta)
 }
 
-func handleItem(w http.ResponseWriter, r *http.Request, repo *config.RepoJSON, mesDesde string) {
-	if _, err := config.ParseMes(mesDesde); err != nil {
+func handleItem(w http.ResponseWriter, r *http.Request, store configStore, mesDesde string) {
+	if _, err := defjson.ParseMes(mesDesde); err != nil {
 		http.Error(w, "mesDesde inválido en la ruta, esperado YYYY-MM", http.StatusBadRequest)
 		return
 	}
@@ -89,14 +101,14 @@ func handleItem(w http.ResponseWriter, r *http.Request, repo *config.RepoJSON, m
 			http.Error(w, "body inválido: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		c := config.ConfigMensual{
+		c := defjson.ConfigMensual{
 			MesDesde:             mesDesde,
 			Porcentajes:          payload.Porcentajes,
 			PorcentajeParaGastos: payload.PorcentajeParaGastos,
 			DiaDeCorteCredito:    payload.DiaDeCorteCredito,
 			TasaCambioUSD:        payload.TasaCambioUSD,
 		}
-		if err := repo.Guardar(c); err != nil {
+		if err := store.GuardarConfig(c); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -104,7 +116,7 @@ func handleItem(w http.ResponseWriter, r *http.Request, repo *config.RepoJSON, m
 		json.NewEncoder(w).Encode(c)
 
 	case http.MethodDelete:
-		if err := repo.Borrar(mesDesde); err != nil {
+		if err := store.BorrarConfig(mesDesde); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
