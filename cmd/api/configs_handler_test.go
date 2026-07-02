@@ -25,7 +25,7 @@ func (s repoStore) ConfigResuelta(mes time.Time) (presupuesto.ConfigPresupuesto,
 	return s.repo.ParaMes(mes)
 }
 func (s repoStore) GuardarConfig(c defjson.ConfigMensual) error { return s.repo.Guardar(c) }
-func (s repoStore) BorrarConfig(mesDesde string) error         { return s.repo.Borrar(mesDesde) }
+func (s repoStore) BorrarConfig(mesDesde string) error          { return s.repo.Borrar(mesDesde) }
 
 func nuevoStore(t *testing.T) repoStore {
 	t.Helper()
