@@ -87,18 +87,18 @@ func New(cfg Config) (*App, error) {
 	}
 
 	return &App{
-		repoConfigs:    repoConfigs,
-		repoCategorias: defjson.NewRepoCategorias(cfg.CategoriasPath),
-		manuales:       defjson.NewRepoGastosManuales(cfg.ManualesPath, repoConfigs),
-		db:             db,
-		writer:         sqlite.NewWriter(db, origenIngesta),
-		overridesRepo:  overridesRepo,
-		reglasPath:     cfg.ReglasPath,
+		repoConfigs:     repoConfigs,
+		repoCategorias:  defjson.NewRepoCategorias(cfg.CategoriasPath),
+		manuales:        defjson.NewRepoGastosManuales(cfg.ManualesPath, repoConfigs),
+		db:              db,
+		writer:          sqlite.NewWriter(db, origenIngesta),
+		overridesRepo:   overridesRepo,
+		reglasPath:      cfg.ReglasPath,
 		exclusionesPath: cfg.ExclusionesPath,
-		sueldoPath:     cfg.SueldoPath,
-		provisorioPath: cfg.ProvisorioPath,
-		overrides:      overrides,
-		reglas:         reglas,
+		sueldoPath:      cfg.SueldoPath,
+		provisorioPath:  cfg.ProvisorioPath,
+		overrides:       overrides,
+		reglas:          reglas,
 	}, nil
 }
 
