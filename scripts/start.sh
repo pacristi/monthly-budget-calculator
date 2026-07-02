@@ -79,6 +79,9 @@ if [[ "$ans" =~ ^[SsYy] ]]; then
   echo "Corriendo scraper..."
   (cd ingesta/open-banking-chile/scraper && node scraper.js)
   echo
+  echo "Guardando en sqlite..."
+  go run ./cmd/cli ingestar obchile --db data/movimientos.db --json data/current.json
+  echo
 fi
 
 # 5. Arranque
