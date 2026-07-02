@@ -60,7 +60,7 @@ type MovimientoVista struct {
 var mesesNombres = []string{"Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"}
 
 // periodoDeMes construye el PeriodoPresupuestario del mes de `mes`: primer día
-// a las 00:00 hasta el último nanosegundo del mes (traducido de main.go:151-154).
+// a las 00:00 hasta el último nanosegundo del mes.
 func periodoDeMes(mes time.Time) presupuesto.PeriodoPresupuestario {
 	return presupuesto.PeriodoPresupuestario{
 		Inicio: time.Date(mes.Year(), mes.Month(), 1, 0, 0, 0, 0, mes.Location()),
@@ -71,7 +71,6 @@ func periodoDeMes(mes time.Time) presupuesto.PeriodoPresupuestario {
 // idsLimite devuelve el set de ids de categorías tipo Limite (gasto). El
 // detalle de gastos y la proyección de pasivos se restringen a estas: los
 // aportes de meta (ahorro/inversión) no son gasto ni pasivo.
-// (traducido de main.go:124-132).
 func idsLimite(cats []presupuesto.Categoria) map[string]bool {
 	out := make(map[string]bool)
 	for _, c := range cats {
@@ -103,7 +102,7 @@ func (a *App) gastosDelPeriodo() ([]presupuesto.Gasto, error) {
 }
 
 // sueldoDelPeriodo detecta el sueldo del periodo desde los abonos de la ventana
-// de búsqueda (traducido de main.go handleBudget + enriquecedor.VentanaSueldo).
+// de búsqueda (VentanaSueldo) aplicando los patrones configurados.
 func (a *App) sueldoDelPeriodo(periodo presupuesto.PeriodoPresupuestario) (float64, error) {
 	patrones, err := defjson.LeerListaStrings(a.sueldoPath)
 	if err != nil {
@@ -120,7 +119,6 @@ func (a *App) sueldoDelPeriodo(periodo presupuesto.PeriodoPresupuestario) (float
 // ResumenDelMes arma el desglose del presupuesto del mes: resuelve config,
 // categorías, gastos enriquecidos + manuales, y sueldo, luego calcula el
 // resumen y filtra el detalle de gastos a categorías límite con carga > 0.
-// (traducido de main.go handleBudget, líneas 134-233).
 func (a *App) ResumenDelMes(mes time.Time) (Resumen, error) {
 	periodo := periodoDeMes(mes)
 
@@ -191,7 +189,6 @@ func (a *App) ResumenDelMes(mes time.Time) (Resumen, error) {
 // Proyecciones proyecta el total comprometido de los gastos límite hacia
 // adelante desde `desde` (tratado como "ahora" del cálculo). Los aportes de
 // meta no son deuda futura, así que se excluyen.
-// (traducido de main.go handleProjections, líneas 235-295).
 func (a *App) Proyecciones(desde time.Time, meses int) ([]Proyeccion, error) {
 	gastos, err := a.gastosDelPeriodo()
 	if err != nil {
@@ -228,7 +225,6 @@ func (a *App) Proyecciones(desde time.Time, meses int) ([]Proyeccion, error) {
 // parte" y clasificación (VistaMovimientos), luego el alias de descripción
 // (DescripcionOverride) y mapea a MovimientoVista. Preserva el orden de la
 // query de cargos (fecha ASC, id ASC).
-// (traducido de cmd/cli/presentacion/movimientos.go, que se disuelve aquí).
 func (a *App) Movimientos() ([]MovimientoVista, error) {
 	cargos, err := sqlite.Cargos(a.db)
 	if err != nil {

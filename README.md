@@ -72,35 +72,19 @@ El wizard te crea los archivos por defecto, pero puedes ajustarlos:
 
 ---
 
-## ¿Cuándo necesito algo más?
+## Histórico con cartolas `.xls`
 
-El modo simple usa el **scraper diario**, que típicamente trae solo movimientos del mes en curso. Si quieres:
-
-- Ver presupuestos de meses pasados.
-- Cargar histórico desde cartolas `.xls` que descargas del banco.
-- Tener tu data persistida localmente sin depender del scraper.
-
-...entonces te interesa el **modo avanzado** abajo. **No es necesario para uso normal.**
-
----
-
-## Avanzado: histórico con cartolas `.xls`
-
-### Cuándo
-
-- Quieres ver el presupuesto de hace 6 meses.
-- Quieres que las cuotas comprometidas en los últimos meses se sigan proyectando aunque el scraper ya no las traiga.
-- Quieres persistir tu data en una BD local (sqlite) en vez de re-scrapear cada día.
+El scraper diario (`make ingest`) trae típicamente solo movimientos del mes en curso. Toda la data se persiste en una BD local (sqlite) — el scraper no es la única fuente. Si además quieres cargar histórico (para ver presupuestos de meses pasados, o para que las cuotas comprometidas se sigan proyectando aunque el scraper ya no las traiga), puedes ingestar las cartolas `.xls` que descargas de la web del banco hacia esa misma BD. **No es necesario para uso normal.**
 
 ### Cómo
 
-1. **Inicializar la BD:**
+1. **Inicializar la BD** (si aún no existe):
 
 ```bash
 make sqlite-init
 ```
 
-2. **Cargar histórico** desde cartolas `.xls` (las que descargas de la web del banco). Una corrida por (año × tipo de cuenta):
+2. **Cargar histórico** desde cartolas `.xls`. Una corrida por (año × tipo de cuenta):
 
 ```bash
 make ingest-xlsx-cta-corriente AÑO=2025 DIR="/path/a/Cuenta Corriente/2025"
@@ -108,24 +92,12 @@ make ingest-xlsx-tc-nacional   DIR="/path/a/Tarjeta de Credito/Nacional/2025"
 make ingest-xlsx-tc-internacional DIR="/path/a/Tarjeta de Credito/Internacional/2025"
 ```
 
-(Idempotente: si lo corres dos veces, no duplica.)
-
-3. **Cambiar al modo sqlite:**
-
-```bash
-make ingest-sqlite   # scraper + volcado al sqlite (reemplaza `make ingest`)
-```
-
-Y para el dashboard / cálculo:
-
-```bash
-go run ./cmd/presupuesto-api --proveedor sqlite --db data/movimientos.db --divisiones data/divisiones.json
-```
+(Idempotente: si lo corres dos veces, no duplica. Los `.xls` van a la misma BD que el scraper; `make serve` la sirve igual.)
 
 ### Limitaciones
 
-- Solo cartolas de **Banco de Chile** tienen parsers `.xls`. Otros bancos requieren implementar un parser que produzca `canonico.MovimientoBruto`.
-- El scraper de Open Banking sí funciona con varios bancos en modo simple.
+- Solo cartolas de **Banco de Chile** tienen parsers `.xls`. Otros bancos requieren implementar un parser que produzca `movimientos.MovimientoBruto`.
+- El scraper de Open Banking sí funciona con varios bancos.
 
 ---
 
@@ -133,13 +105,13 @@ go run ./cmd/presupuesto-api --proveedor sqlite --db data/movimientos.db --divis
 
 Solo si quieres cargar cartolas históricas de otro banco. Pasos:
 
-1. Crear un paquete bajo `internal/cartola/canonico/<banco>` que traduzca la cartola a `canonico.MovimientoBruto`.
-2. Mirar `internal/cartola/canonico/bchile/cta_corriente.go` como referencia. El patrón:
+1. Crear un paquete `ingesta/<banco>/parser` con la lógica pura que traduce la cartola a `movimientos.MovimientoBruto`.
+2. Mirar `ingesta/banco-de-chile/parser/cta_corriente.go` como referencia. El patrón:
    - Capa I/O que abre el `.xls` con `extrame/xls`.
    - Capa pura que transforma filas crudas a `MovimientoBruto`.
-3. Registrar el parser en `internal/cartola/fuentes`.
+3. Exponer una fuente en `ingesta/<banco>/` que implemente `ingesta.FuenteMovimientos` (ver `ingesta/banco-de-chile/fuente.go`).
 
-Flujo de ingesta: `internal/cartola/canonico/<banco>` parsea y normaliza datos externos, `internal/cartola/importacion` orquesta lectura y guardado, y `internal/cartola/sqlite` persiste con deduplicación.
+Flujo de ingesta: `ingesta/<banco>/parser` parsea y normaliza datos externos, el runner `ingesta.Ingestar` orquesta lectura y guardado, y `movimientos/sqlite` persiste con deduplicación.
 
 PRs bienvenidas.
 
@@ -149,9 +121,9 @@ PRs bienvenidas.
 
 **"Sueldo no encontrado"**: edita `data/sueldo.json` (o la pestaña Configuración) con la substring que aparece en tu depósito de sueldo. Ej: si tu empleador escribe `"REMUNERACION MAYO"`, agregas `remuneracion`.
 
-**"Los montos están raros"**: si pasaste por varias versiones del software, puedes tener data corrupta. En modo simple no pasa (el scraper sobrescribe `data/current.json` cada vez). En modo avanzado, `rm data/movimientos.db && make sqlite-init` y vuelves a cargar.
+**"Los montos están raros"**: si pasaste por varias versiones del software, puedes tener data corrupta. `rm data/movimientos.db && make sqlite-init` y vuelves a ingestar (scraper y/o `.xls`).
 
-**"No puedo guardar mi parte / 400 Bad Request"**: asegúrate de levantar el API con `data/divisiones.json` accesible. En modo simple, `make serve` ya lo pasa correctamente.
+**"No puedo guardar mi parte / 400 Bad Request"**: asegúrate de levantar el API con `data/divisiones.json` accesible. `make serve` ya lo pasa correctamente.
 
 ---
 

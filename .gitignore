@@ -1,9 +1,10 @@
 data/*.json
 data/*.log
 data/archive/
-ingest/node_modules/
+ingesta/open-banking-chile/node_modules/
 .env
 bin
+.DS_Store
 
 # excepciones: ejemplos commiteables como template para usuarios nuevos
 !data/*.example.json

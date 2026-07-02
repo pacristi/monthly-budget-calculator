@@ -1,6 +1,6 @@
-// Package canonico define los hechos financieros normalizados que producen
-// los parsers bancarios y consumen las capas de importación y persistencia.
-package canonico
+// Package movimientos define los hechos financieros normalizados que producen
+// los parsers bancarios y consumen las capas de ingesta y persistencia.
+package movimientos
 
 import "time"
 

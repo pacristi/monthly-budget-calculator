@@ -8,8 +8,6 @@ import (
 // Refrescar corre el scraper de Open Banking Chile (dejando su salida en
 // provisorioPath) y, si persistir es true, ingesta ese snapshot a sqlite.
 // Devuelve cuántos movimientos nuevos quedaron almacenados (0 si !persistir).
-// (traducido de cmd/cli/sync.go CasoDeUso.Ejecutar, sin la interfaz
-// banco.Scraper — la orquestación vive acá directo).
 func (a *App) Refrescar(persistir bool) (int, error) {
 	scraper := obcl.EjecutarScraper{
 		Dir:        "ingesta/open-banking-chile",
