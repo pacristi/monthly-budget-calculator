@@ -3,11 +3,11 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
-MAIN_CLI=./cmd/presupuesto-cli
-MAIN_API=./cmd/presupuesto-api
+MAIN_CLI=./cmd/cli
+MAIN_API=./cmd/api
 BIN_DIR=./bin
 
-.PHONY: help start ingest serve run test build clean \
+.PHONY: help start ingest serve test build clean \
         sqlite-init ingest-sqlite ingest-xlsx-cta-corriente ingest-xlsx-tc-nacional ingest-xlsx-tc-internacional
 
 help: ## Muestra esta ayuda
@@ -27,9 +27,6 @@ ingest: ## Trae la cartola del día y la vuelca al sqlite (idempotente)
 serve: ## Levanta el dashboard web en http://localhost:8085
 	@go run $(MAIN_API) --divisiones data/divisiones.json --provisorio data/current.json
 
-run: ## Imprime el cálculo del presupuesto en consola
-	@go run $(MAIN_CLI) --divisiones data/divisiones.json --provisorio data/current.json
-
 test: ## Corre los tests unitarios
 	@go test ./...
 
@@ -40,7 +37,7 @@ test: ## Corre los tests unitarios
 # ======================================================================
 
 sqlite-init: ## (avanzado) Inicializa la BD sqlite vacía
-	@go run $(MAIN_CLI) sqlite init --db data/movimientos.db
+	@go run $(MAIN_CLI) sqlite-init --db data/movimientos.db
 
 ingest-sqlite: ## (avanzado) Scraper + volcado al sqlite (idempotente)
 	@cd ingesta/open-banking-chile && node scraper.js
