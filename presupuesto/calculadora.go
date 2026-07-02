@@ -1,15 +1,18 @@
 package presupuesto
 
 type Calculadora struct {
-	proveedor  ProveedorFinanciero
+	sueldo     float64
+	gastos     []Gasto
 	resolvedor ResolvedorConfig
 }
 
-// NewCalculadora crea una nueva instancia de la calculadora.
-// El porcentaje aplicable se resuelve del mes del periodo evaluado.
-func NewCalculadora(proveedor ProveedorFinanciero, resolvedor ResolvedorConfig) *Calculadora {
+// NewCalculadora crea una nueva instancia de la calculadora. El sueldo y los
+// gastos del periodo se resuelven fuera (store + dominio) y se inyectan
+// directo; el porcentaje aplicable se resuelve del mes del periodo evaluado.
+func NewCalculadora(sueldo float64, gastos []Gasto, resolvedor ResolvedorConfig) *Calculadora {
 	return &Calculadora{
-		proveedor:  proveedor,
+		sueldo:     sueldo,
+		gastos:     gastos,
 		resolvedor: resolvedor,
 	}
 }
@@ -39,18 +42,8 @@ func (c *Calculadora) CalcularResumen(periodo PeriodoPresupuestario, categorias 
 		return ResumenPresupuesto{}, err
 	}
 
-	sueldo, err := c.proveedor.ObtenerSueldoBase(periodo)
-	if err != nil {
-		return ResumenPresupuesto{}, err
-	}
-
-	gastos, err := c.proveedor.ObtenerGastosValidos(periodo)
-	if err != nil {
-		return ResumenPresupuesto{}, err
-	}
-
 	acumuladoPorCategoria := make(map[string]float64)
-	for _, gasto := range gastos {
+	for _, gasto := range c.gastos {
 		acumuladoPorCategoria[gasto.CategoriaID] += gasto.CalcularCargaParaPeriodo(periodo)
 	}
 
@@ -63,14 +56,14 @@ func (c *Calculadora) CalcularResumen(periodo PeriodoPresupuestario, categorias 
 			CategoriaID: cat.ID,
 			Nombre:      cat.Nombre,
 			Tipo:        cat.Tipo,
-			Presupuesto: sueldo * pct,
+			Presupuesto: c.sueldo * pct,
 			Acumulado:   acumuladoPorCategoria[cat.ID],
 		})
 	}
 
 	return ResumenPresupuesto{
-		Sueldo:     sueldo,
+		Sueldo:     c.sueldo,
 		Categorias: resultados,
-		SinAsignar: sueldo * (1 - sumaPorcentajes),
+		SinAsignar: c.sueldo * (1 - sumaPorcentajes),
 	}, nil
 }

@@ -5,18 +5,6 @@ import (
 	"time"
 )
 
-type fakeProveedor struct {
-	sueldo float64
-	gastos []Gasto
-}
-
-func (f fakeProveedor) ObtenerSueldoBase(PeriodoPresupuestario) (float64, error) {
-	return f.sueldo, nil
-}
-func (f fakeProveedor) ObtenerGastosValidos(PeriodoPresupuestario) ([]Gasto, error) {
-	return f.gastos, nil
-}
-
 type fakeResolvedor struct{ cfg ConfigPresupuesto }
 
 func (f fakeResolvedor) ParaMes(time.Time) (ConfigPresupuesto, error) { return f.cfg, nil }
@@ -39,17 +27,15 @@ func gastoEn(id, categoriaID string, monto float64, dia int) Gasto {
 
 func TestCalcularResumen_UnaCategoriaLimite(t *testing.T) {
 	periodo := periodoDe(2026, time.May)
-	prov := fakeProveedor{
-		sueldo: 1000,
-		gastos: []Gasto{
-			gastoEn("1", "gasto", 100, 5),
-			gastoEn("2", "gasto", 50, 10),
-		},
+	sueldo := 1000.0
+	gastos := []Gasto{
+		gastoEn("1", "gasto", 100, 5),
+		gastoEn("2", "gasto", 50, 10),
 	}
 	res := fakeResolvedor{cfg: ConfigPresupuesto{Porcentajes: map[string]float64{"gasto": 0.25}}}
 	categorias := []Categoria{{ID: "gasto", Nombre: "Gasto", Tipo: Limite}}
 
-	calc := NewCalculadora(prov, res)
+	calc := NewCalculadora(sueldo, gastos, res)
 	resumen, err := calc.CalcularResumen(periodo, categorias)
 	if err != nil {
 		t.Fatalf("error inesperado: %v", err)
@@ -78,12 +64,10 @@ func TestCalcularResumen_UnaCategoriaLimite(t *testing.T) {
 
 func TestCalcularResumen_MultiplesCategorias(t *testing.T) {
 	periodo := periodoDe(2026, time.May)
-	prov := fakeProveedor{
-		sueldo: 1000,
-		gastos: []Gasto{
-			gastoEn("1", "gasto", 100, 5),
-			gastoEn("2", "ahorro", 200, 10),
-		},
+	sueldo := 1000.0
+	gastos := []Gasto{
+		gastoEn("1", "gasto", 100, 5),
+		gastoEn("2", "ahorro", 200, 10),
 	}
 	res := fakeResolvedor{cfg: ConfigPresupuesto{Porcentajes: map[string]float64{
 		"gasto":  0.25,
@@ -96,7 +80,7 @@ func TestCalcularResumen_MultiplesCategorias(t *testing.T) {
 		{ID: "inversion", Nombre: "Inversión", Tipo: Meta},
 	}
 
-	resumen, err := NewCalculadora(prov, res).CalcularResumen(periodo, categorias)
+	resumen, err := NewCalculadora(sueldo, gastos, res).CalcularResumen(periodo, categorias)
 	if err != nil {
 		t.Fatalf("error inesperado: %v", err)
 	}
