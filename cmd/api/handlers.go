@@ -117,6 +117,26 @@ func (deps apiDeps) handleMovimientoAlias(w http.ResponseWriter, r *http.Request
 	responderOK(w)
 }
 
+// handleMovimientoMoneda sirve POST /api/movimientos/moneda: corrige a mano
+// si un movimiento es USD o CLP (la heurística automática falla en cargos
+// USD sin decimales).
+func (deps apiDeps) handleMovimientoMoneda(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var o presupuesto.Override
+	if err := json.NewDecoder(r.Body).Decode(&o); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := deps.app.GuardarMonedaDeMovimiento(o); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	responderOK(w)
+}
+
 // handleCategorias sirve GET (lista) y POST (reemplazo total) de categorías.
 func (deps apiDeps) handleCategorias(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {

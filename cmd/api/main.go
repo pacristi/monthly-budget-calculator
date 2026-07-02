@@ -66,6 +66,7 @@ func main() {
 	http.HandleFunc("/api/divisions", deps.handleDivisions)
 	http.HandleFunc("/api/movimientos/categoria", deps.handleMovimientoCategoria)
 	http.HandleFunc("/api/movimientos/alias", deps.handleMovimientoAlias)
+	http.HandleFunc("/api/movimientos/moneda", deps.handleMovimientoMoneda)
 	http.HandleFunc("/api/categorias", deps.handleCategorias)
 	http.HandleFunc("/api/reglas", deps.handleReglas)
 	http.HandleFunc("/api/configs", handlerListar(application))
