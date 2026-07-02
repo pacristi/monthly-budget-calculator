@@ -44,7 +44,7 @@ type App struct {
 	db     *sql.DB
 	writer *sqlite.Writer
 
-	divisionesPath  string
+	overridesRepo   *defjson.RepoOverrides
 	reglasPath      string
 	exclusionesPath string
 	sueldoPath      string
@@ -71,7 +71,8 @@ func New(cfg Config) (*App, error) {
 		return nil, fmt.Errorf("cargando reglas: %w", err)
 	}
 
-	overrides, err := defjson.LeerOverrides(cfg.DivisionesPath)
+	overridesRepo := defjson.NewRepoOverrides(cfg.DivisionesPath)
+	overrides, err := overridesRepo.Leer()
 	if err != nil {
 		return nil, fmt.Errorf("cargando overrides: %w", err)
 	}
@@ -86,18 +87,18 @@ func New(cfg Config) (*App, error) {
 	}
 
 	return &App{
-		repoConfigs:     repoConfigs,
-		repoCategorias:  defjson.NewRepoCategorias(cfg.CategoriasPath),
-		manuales:        defjson.NewRepoGastosManuales(cfg.ManualesPath, repoConfigs),
-		db:              db,
-		writer:          sqlite.NewWriter(db, origenIngesta),
-		divisionesPath:  cfg.DivisionesPath,
-		reglasPath:      cfg.ReglasPath,
+		repoConfigs:    repoConfigs,
+		repoCategorias: defjson.NewRepoCategorias(cfg.CategoriasPath),
+		manuales:       defjson.NewRepoGastosManuales(cfg.ManualesPath, repoConfigs),
+		db:             db,
+		writer:         sqlite.NewWriter(db, origenIngesta),
+		overridesRepo:  overridesRepo,
+		reglasPath:     cfg.ReglasPath,
 		exclusionesPath: cfg.ExclusionesPath,
-		sueldoPath:      cfg.SueldoPath,
-		provisorioPath:  cfg.ProvisorioPath,
-		overrides:       overrides,
-		reglas:          reglas,
+		sueldoPath:     cfg.SueldoPath,
+		provisorioPath: cfg.ProvisorioPath,
+		overrides:      overrides,
+		reglas:         reglas,
 	}, nil
 }
 
@@ -113,7 +114,7 @@ func (a *App) Close() error {
 // llama tras cada escritura de override para que las lecturas siguientes
 // reflejen el cambio.
 func (a *App) recargarOverrides() error {
-	overrides, err := defjson.LeerOverrides(a.divisionesPath)
+	overrides, err := a.overridesRepo.Leer()
 	if err != nil {
 		return err
 	}

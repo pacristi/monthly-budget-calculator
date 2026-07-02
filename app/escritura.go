@@ -10,7 +10,7 @@ import (
 // GuardarMiParte persiste el override de "mi parte" (split) de un movimiento y
 // recarga el cache de overrides.
 func (a *App) GuardarMiParte(o presupuesto.Override) error {
-	if err := defjson.GuardarMiParte(a.divisionesPath, o); err != nil {
+	if err := a.overridesRepo.GuardarMiParte(o); err != nil {
 		return err
 	}
 	return a.recargarOverrides()
@@ -19,7 +19,7 @@ func (a *App) GuardarMiParte(o presupuesto.Override) error {
 // GuardarCategoriaDeMovimiento asigna a mano la categoría de un movimiento,
 // preservando el split si ya existía, y recarga el cache de overrides.
 func (a *App) GuardarCategoriaDeMovimiento(o presupuesto.Override) error {
-	if err := defjson.GuardarCategoria(a.divisionesPath, o); err != nil {
+	if err := a.overridesRepo.GuardarCategoria(o); err != nil {
 		return err
 	}
 	return a.recargarOverrides()
@@ -28,7 +28,17 @@ func (a *App) GuardarCategoriaDeMovimiento(o presupuesto.Override) error {
 // GuardarAlias persiste el alias de descripción de un movimiento y recarga el
 // cache de overrides.
 func (a *App) GuardarAlias(o presupuesto.Override) error {
-	if err := defjson.GuardarAlias(a.divisionesPath, o); err != nil {
+	if err := a.overridesRepo.GuardarAlias(o); err != nil {
+		return err
+	}
+	return a.recargarOverrides()
+}
+
+// GuardarMonedaDeMovimiento corrige a mano si un movimiento es USD o CLP
+// (la heurística automática falla en cargos USD sin decimales) y recarga el
+// cache de overrides.
+func (a *App) GuardarMonedaDeMovimiento(o presupuesto.Override) error {
+	if err := a.overridesRepo.GuardarMoneda(o); err != nil {
 		return err
 	}
 	return a.recargarOverrides()
