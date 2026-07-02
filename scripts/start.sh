@@ -63,9 +63,9 @@ ensure_copy data/sueldo.json data/sueldo.example.json "cómo se identifica tu su
 echo
 
 # 3. Dependencias
-if [ ! -d ingesta/open-banking-chile/node_modules ]; then
+if [ ! -d ingesta/open-banking-chile/scraper/node_modules ]; then
   echo "Instalando dependencias del scraper..."
-  (cd ingesta/open-banking-chile && npm install)
+  (cd ingesta/open-banking-chile/scraper && npm install)
 fi
 echo "Resolviendo dependencias Go..."
 go mod tidy
@@ -77,7 +77,7 @@ ans="${ans:-S}"
 if [[ "$ans" =~ ^[SsYy] ]]; then
   echo
   echo "Corriendo scraper..."
-  (cd ingesta/open-banking-chile && node scraper.js)
+  (cd ingesta/open-banking-chile/scraper && node scraper.js)
   echo
 fi
 

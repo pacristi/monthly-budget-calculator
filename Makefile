@@ -21,7 +21,7 @@ start: ## Wizard: configura .env, instala deps y levanta el dashboard
 	@bash scripts/start.sh
 
 ingest: ## Trae la cartola del día y la vuelca al sqlite (idempotente)
-	@cd ingesta/open-banking-chile && node scraper.js
+	@cd ingesta/open-banking-chile/scraper && node scraper.js
 	@go run $(MAIN_CLI) ingestar obchile --db data/movimientos.db --json data/current.json
 
 serve: ## Levanta el dashboard web en http://localhost:8085
@@ -40,7 +40,7 @@ sqlite-init: ## (avanzado) Inicializa la BD sqlite vacía
 	@go run $(MAIN_CLI) sqlite-init --db data/movimientos.db
 
 ingest-sqlite: ## (avanzado) Scraper + volcado al sqlite (idempotente)
-	@cd ingesta/open-banking-chile && node scraper.js
+	@cd ingesta/open-banking-chile/scraper && node scraper.js
 	@go run $(MAIN_CLI) ingestar obchile --db data/movimientos.db --json data/current.json
 
 ingest-xlsx-cta-corriente: ## (avanzado) Carga cartolas .xls de cuenta corriente. Args: AÑO=2025 DIR="ruta"

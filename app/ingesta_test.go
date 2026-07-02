@@ -19,7 +19,7 @@ import (
 // raíz del repo, que es donde Dir se resuelve en runtime. app/ es hija
 // directa de la raíz, así que ".." reconstruye esa raíz para el chequeo.
 func TestRefrescarScraperDirExiste(t *testing.T) {
-	const dir = "ingesta/open-banking-chile"
+	const dir = "ingesta/open-banking-chile/scraper"
 	const script = "scraper.js"
 
 	repoRoot := ".."

@@ -1,7 +1,7 @@
 data/*.json
 data/*.log
 data/archive/
-ingesta/open-banking-chile/node_modules/
+ingesta/open-banking-chile/scraper/node_modules/
 .env
 bin
 .DS_Store

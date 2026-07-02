@@ -10,7 +10,7 @@ import (
 // Devuelve cuántos movimientos nuevos quedaron almacenados (0 si !persistir).
 func (a *App) Refrescar(persistir bool) (int, error) {
 	scraper := obcl.EjecutarScraper{
-		Dir:        "ingesta/open-banking-chile",
+		Dir:        "ingesta/open-banking-chile/scraper",
 		Script:     "scraper.js",
 		OutputPath: a.provisorioPath,
 	}
